@@ -147,7 +147,9 @@ void Player::audioTaskMain() {
 
     if (st == DecodeStatus::Finished) {
       state_ = PlayState::Done;
-      autoNextPending_.store(true);
+      if (autoNextEnabled_) {
+        autoNextPending_.store(true);
+      }
       break;
     }
     if (st == DecodeStatus::Error) {

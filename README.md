@@ -91,13 +91,11 @@ Authoritative map (matches firmware `src/input.cpp`):
 | `.` or `/` | Cursor down |
 | `Enter` | Open folder or play file |
 | `Space` | Play highlighted audio file |
+| `S` or `Tab` | **Settings** |
 | `Backspace` or `` ` `` | Parent directory |
 | `Enter` when no SD | Retry mount |
 
-Hint bar: `;/ move  Ent open  Bs back`
-
 > Cardputer has **no Esc key**. Use **Backspace** (or `` ` ``) for Back.
-> **Enter** is a special key (`status.enter`), not the letter key row.
 
 ### Now Playing
 
@@ -108,9 +106,26 @@ Hint bar: `;/ move  Ent open  Bs back`
 | `=` or `+` | Volume up (~5%) |
 | `[` | Seek back ~5 s |
 | `]` | Seek forward ~5 s |
+| `S` or `Tab` | **Settings** |
 | `Backspace` or `` ` `` | Back to browse (**audio keeps playing**) |
 
-Hint bar: `Spc pause  [] seek  ,= vol  Bs list`
+### Settings (`S` / Tab)
+
+| Item | Adjust |
+|------|--------|
+| Volume | `,` / `.` or `-` / `=` |
+| Brightness | same |
+| Scr timeout | cycle 5s / 10s / 30s / 60s / never |
+| Auto-next | ON / OFF (next track in folder) |
+
+| Key | Action |
+|-----|--------|
+| `;` / `.` | Move row |
+| `,` `.` `-` `=` `[` `]` | Change value |
+| `Enter` | Toggle timeout / auto-next |
+| `Backspace` / `S` | Save & exit |
+
+Settings are stored in **NVS** and restored on boot.
 
 Starting another file from Browse replaces the current track. When a track ends, the
 next audio file in the **same folder** auto-plays; if none remain, status shows `DONE`.

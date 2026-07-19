@@ -13,4 +13,5 @@ enum class Action : uint8_t {
   SeekFwd,
   SeekBack,
   RetrySd,
+  Settings,  // open settings (Tab or 's')
 };

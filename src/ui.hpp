@@ -1,5 +1,6 @@
 #pragma once
 #include "types.hpp"
+#include "settings.hpp"
 #include <cstdint>
 
 class Ui {
@@ -9,28 +10,34 @@ class Ui {
   bool render(Screen screen,
               const BrowseSnapshot& browse,
               const PlayerSnapshot& player,
+              const Settings& settings,
               uint32_t nowMs,
               bool force = false);
 
   void setDisplayOn(bool on);
   bool displayOn() const { return displayOn_; }
+  void setBrightness(uint8_t b);
 
  private:
   void drawBrowse(const BrowseSnapshot& b, bool full);
   void drawPlaying(const PlayerSnapshot& p, bool full);
   void drawPlayingProgress(const PlayerSnapshot& p);
+  void drawSettings(const Settings& s);
   void drawHint(const char* text);
   void drawToastIfAny(uint32_t nowMs);
   bool browseChanged(const BrowseSnapshot& b) const;
   bool playerChanged(const PlayerSnapshot& p) const;
   bool playerChromeChanged(const PlayerSnapshot& p) const;
+  bool settingsChanged(const Settings& s) const;
   void rememberBrowse(const BrowseSnapshot& b);
   void rememberPlayer(const PlayerSnapshot& p);
+  void rememberSettings(const Settings& s);
 
   Toast toast_{};
   Screen lastScreen_{Screen::Browse};
   bool hasLastBrowse_ = false;
   bool hasLastPlayer_ = false;
+  bool hasLastSettings_ = false;
   bool displayOn_ = true;
 
   char lastPath_[cfg::kMaxPathLen]{};
@@ -42,6 +49,7 @@ class Ui {
   bool lastSdOk_ = false;
 
   PlayerSnapshot lastPlayer_{};
+  SettingsSnapshot lastSettings_{};
   uint32_t lastToastExp_ = 0;
   char lastHint_[40]{};
 };

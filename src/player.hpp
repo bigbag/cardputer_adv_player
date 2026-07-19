@@ -24,6 +24,8 @@ class Player {
   void adjustVolume(int deltaPercent);
   void seekRelative(int deltaSeconds);
   void service();
+  void setAutoNext(bool on) { autoNextEnabled_ = on; }
+  bool autoNext() const { return autoNextEnabled_; }
   PlayerSnapshot snapshot() const;
   bool takeError(char* buf, size_t cap);
 
@@ -61,4 +63,5 @@ class Player {
   char currentName_[cfg::kMaxNameLen]{};
   char lastError_[48]{};
   int volume_ = cfg::kDefaultVolumePercent;
+  bool autoNextEnabled_ = true;
 };

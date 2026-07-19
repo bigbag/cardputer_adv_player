@@ -23,6 +23,10 @@ Action Input::poll(Screen screen) {
     return Action::Back;
   }
 
+  if (st.tab) {
+    return Action::Settings;
+  }
+
   for (char key : st.word) {
     switch (key) {
       case ';':
@@ -30,10 +34,10 @@ Action Input::poll(Screen screen) {
       case '/':
         return Action::Down;
       case '.':
-        // M5 samples use '.' as down in lists; on Now Playing it is volume up.
-        return (screen == Screen::Browse) ? Action::Down : Action::VolUp;
+        // Lists (Browse/Settings): down. Playing: volume up.
+        return (screen == Screen::Playing) ? Action::VolUp : Action::Down;
       case ',':
-        return (screen == Screen::Browse) ? Action::None : Action::VolDown;
+        return (screen == Screen::Playing) ? Action::VolDown : Action::None;
       case '[':
         return Action::SeekBack;
       case ']':
@@ -43,7 +47,9 @@ Action Input::poll(Screen screen) {
         return Action::Back;
       case ' ':
         return Action::Space;
-      // Extra volume keys while playing (always available).
+      case 's':
+      case 'S':
+        return Action::Settings;
       case '=':
       case '+':
         return Action::VolUp;

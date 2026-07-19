@@ -10,9 +10,13 @@ void App::begin() {
   M5Cardputer.begin(cfg, true);
   M5Cardputer.Display.setRotation(1);
   M5Cardputer.Display.setFont(&fonts::Font0);
-  M5Cardputer.Display.setBrightness(cfg::kDisplayBrightness);
 
-  Serial.printf("[app] board=%d\n", static_cast<int>(M5.getBoard()));
+  settings_.load();
+  Serial.printf("[app] board=%d vol=%d bright=%u timeout=%lu autonext=%d\n",
+                static_cast<int>(M5.getBoard()), settings_.volumePercent(),
+                settings_.brightness(),
+                static_cast<unsigned long>(settings_.displayTimeoutMs()),
+                settings_.autoNext() ? 1 : 0);
 
   audio_.begin();
   browser_.begin();
@@ -21,22 +25,46 @@ void App::begin() {
   ui_.begin();
   input_.begin();
 
+  applySettings();
+
   lastActivityMs_ = millis();
-  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), lastActivityMs_, true);
+  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, lastActivityMs_, true);
+}
+
+void App::applySettings() {
+  player_.setVolumePercent(settings_.volumePercent());
+  player_.setAutoNext(settings_.autoNext());
+  ui_.setBrightness(settings_.brightness());
+  if (ui_.displayOn()) {
+    M5Cardputer.Display.setBrightness(settings_.brightness());
+  }
+}
+
+void App::openSettings() {
+  settingsReturn_ = (screen_ == Screen::Settings) ? Screen::Browse : screen_;
+  screen_ = Screen::Settings;
+}
+
+void App::closeSettings() {
+  settings_.save();
+  applySettings();
+  screen_ = settingsReturn_;
 }
 
 void App::noteActivity(uint32_t nowMs) {
   lastActivityMs_ = nowMs;
   if (!ui_.displayOn()) {
     ui_.setDisplayOn(true);
-    // Immediate full paint after wake.
-    ui_.render(screen_, browser_.snapshot(), player_.snapshot(), nowMs, true);
+    M5Cardputer.Display.setBrightness(settings_.brightness());
+    ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, nowMs, true);
   }
 }
 
 void App::updateDisplayPower(uint32_t nowMs) {
   if (!ui_.displayOn()) return;
-  if ((nowMs - lastActivityMs_) >= cfg::kDisplayTimeoutMs) {
+  const uint32_t timeout = settings_.displayTimeoutMs();
+  if (timeout == 0) return;  // never
+  if ((nowMs - lastActivityMs_) >= timeout) {
     Serial.println("[app] display off (timeout)");
     ui_.setDisplayOn(false);
   }
@@ -52,7 +80,6 @@ void App::loop() {
   bool forceUi = false;
   if (a != Action::None) {
     noteActivity(now);
-    // Any key while screen was off only wakes; still process the key.
     handle(a);
     forceUi = true;
   }
@@ -62,23 +89,34 @@ void App::loop() {
     noteActivity(now);
     ui_.showToast(errBuf, now);
     if (player_.snapshot().state == PlayState::Error) {
-      screen_ = Screen::Browse;
+      if (screen_ != Screen::Settings) screen_ = Screen::Browse;
     }
     forceUi = true;
   }
 
-  // Progress ticks while playing should not reset idle timeout.
-  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), now, forceUi);
+  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, now, forceUi);
   updateDisplayPower(now);
 
   delay(10);
 }
 
 void App::handle(Action a) {
-  if (screen_ == Screen::Browse) {
-    handleBrowse(a);
-  } else {
-    handlePlaying(a);
+  // Global: Settings key from Browse/Playing
+  if (a == Action::Settings && screen_ != Screen::Settings) {
+    openSettings();
+    return;
+  }
+
+  switch (screen_) {
+    case Screen::Browse:
+      handleBrowse(a);
+      break;
+    case Screen::Playing:
+      handlePlaying(a);
+      break;
+    case Screen::Settings:
+      handleSettings(a);
+      break;
   }
 }
 
@@ -128,9 +166,11 @@ void App::handlePlaying(Action a) {
       break;
     case Action::VolUp:
       player_.adjustVolume(cfg::kVolumeStepPercent);
+      settings_.setVolumePercent(player_.snapshot().volumePercent);
       break;
     case Action::VolDown:
       player_.adjustVolume(-cfg::kVolumeStepPercent);
+      settings_.setVolumePercent(player_.snapshot().volumePercent);
       break;
     case Action::SeekFwd:
       player_.seekRelative(cfg::kSeekStepSeconds);
@@ -140,6 +180,89 @@ void App::handlePlaying(Action a) {
       break;
     case Action::Back:
       screen_ = Screen::Browse;
+      break;
+    default:
+      break;
+  }
+}
+
+void App::handleSettings(Action a) {
+  switch (a) {
+    case Action::Up:
+      settings_.moveCursor(-1);
+      break;
+    case Action::Down:
+      settings_.moveCursor(1);
+      break;
+    case Action::VolUp:
+    case Action::SeekFwd:
+      // increase / next value
+      switch (settings_.cursor()) {
+        case 0:
+          settings_.setVolumePercent(settings_.volumePercent() + cfg::kVolumeStepPercent);
+          player_.setVolumePercent(settings_.volumePercent());
+          break;
+        case 1:
+          settings_.adjustBrightness(+15);
+          ui_.setBrightness(settings_.brightness());
+          M5Cardputer.Display.setBrightness(settings_.brightness());
+          break;
+        case 2:
+          settings_.cycleDisplayTimeout();
+          break;
+        case 3:
+          settings_.toggleAutoNext();
+          player_.setAutoNext(settings_.autoNext());
+          break;
+        default:
+          break;
+      }
+      break;
+    case Action::VolDown:
+    case Action::SeekBack:
+      switch (settings_.cursor()) {
+        case 0:
+          settings_.setVolumePercent(settings_.volumePercent() - cfg::kVolumeStepPercent);
+          player_.setVolumePercent(settings_.volumePercent());
+          break;
+        case 1:
+          settings_.adjustBrightness(-15);
+          ui_.setBrightness(settings_.brightness());
+          M5Cardputer.Display.setBrightness(settings_.brightness());
+          break;
+        case 2:
+          // cycle reverse: call cycle enough times (5 options)
+          settings_.cycleDisplayTimeout();
+          settings_.cycleDisplayTimeout();
+          settings_.cycleDisplayTimeout();
+          settings_.cycleDisplayTimeout();
+          break;
+        case 3:
+          settings_.toggleAutoNext();
+          player_.setAutoNext(settings_.autoNext());
+          break;
+        default:
+          break;
+      }
+      break;
+    case Action::Enter:
+    case Action::Space:
+      // toggle / cycle primary action on row
+      switch (settings_.cursor()) {
+        case 2:
+          settings_.cycleDisplayTimeout();
+          break;
+        case 3:
+          settings_.toggleAutoNext();
+          player_.setAutoNext(settings_.autoNext());
+          break;
+        default:
+          break;
+      }
+      break;
+    case Action::Back:
+    case Action::Settings:
+      closeSettings();
       break;
     default:
       break;

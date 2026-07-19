@@ -2,7 +2,7 @@
 #include "config.hpp"
 #include <cstdint>
 
-enum class Screen : uint8_t { Browse, Playing };
+enum class Screen : uint8_t { Browse, Playing, Settings };
 enum class EntryKind : uint8_t { Dir, Mp3, Wav };
 enum class PlayState : uint8_t { Idle, Playing, Paused, Done, Error };
 
@@ -33,4 +33,12 @@ struct PlayerSnapshot {
 struct Toast {
   char text[48];
   uint32_t expiresAtMs;
+};
+
+struct SettingsSnapshot {
+  int volumePercent;
+  uint8_t brightness;
+  uint32_t displayTimeoutMs;  // 0 = never
+  bool autoNext;
+  size_t cursor;
 };
