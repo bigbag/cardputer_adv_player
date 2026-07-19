@@ -18,7 +18,9 @@ void App::begin() {
                 static_cast<unsigned long>(settings_.displayTimeoutMs()),
                 settings_.autoNext() ? 1 : 0);
 
-  audio_.begin();
+  if (!audio_.begin()) {
+    Serial.println("[app] audio begin FAILED");
+  }
   browser_.begin();
   browser_.listCurrent();
   player_.begin(&audio_, &browser_);
@@ -26,6 +28,8 @@ void App::begin() {
   input_.begin();
 
   applySettings();
+  // Ensure volume from NVS is pushed after codec init.
+  player_.setVolumePercent(settings_.volumePercent());
 
   lastActivityMs_ = millis();
   ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, lastActivityMs_, true);

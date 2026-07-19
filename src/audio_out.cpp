@@ -8,16 +8,16 @@
 
 static constexpr i2s_port_t kI2sPort = I2S_NUM_0;
 
-// ES8311 bring-up. DAC volume (0x32) is set separately via applyVolume().
-// 0xBF ≈ 0 dB (unity); we intentionally do not leave it maxed for HP path.
+// ES8311 bring-up. DAC volume (0x32) set in applyVolume().
+// Sequence from working Cardputer-Adv players + leave room for vol reg.
 static const uint8_t kEs8311InitSeq[][2] = {
-    {0x00, 0x80},  // reset
-    {0x01, 0xB5},  // clock manager 1
-    {0x02, 0x18},  // clock manager 2
-    {0x0D, 0x01},  // system
-    {0x12, 0x00},  // power
-    {0x13, 0x10},  // DAC power-ish
-    {0x37, 0x08},  // analog
+    {0x00, 0x80},
+    {0x01, 0xB5},
+    {0x02, 0x18},
+    {0x0D, 0x01},
+    {0x12, 0x00},
+    {0x13, 0x10},
+    {0x37, 0x08},
 };
 
 bool AudioOut::esWrite(uint8_t reg, uint8_t val) {
@@ -27,72 +27,59 @@ bool AudioOut::esWrite(uint8_t reg, uint8_t val) {
 
 bool AudioOut::esInitRegisters() {
   for (auto& pair : kEs8311InitSeq) {
-    if (!esWrite(pair[0], pair[1])) return false;
-    delay(1);
+    if (!esWrite(pair[0], pair[1])) {
+      Serial.printf("[audio] ES8311 write fail reg 0x%02X\n", pair[0]);
+      return false;
+    }
+    delay(2);
   }
   return true;
 }
 
-// Map UI 0..100 onto ES8311 DAC digital volume register.
-// Datasheet-style: 0xBF ≈ 0 dB; each step ~0.5 dB. Mute near 0.
-// Matches common ESP-ADF mapping: reg = 0xBF - 2*(100-vol) for vol>0.
+// UI 0..100 → ES8311 DAC dig vol. 0xBF ≈ 0 dB; ~0.5 dB/step (ADF-style).
 uint8_t AudioOut::esDacRegFromPercent(int percent) {
-  if (percent <= 0) return 0x00;  // mute-ish
+  if (percent <= 0) return 0x00;
   if (percent > 100) percent = 100;
+  // Keep a usable floor so low UI settings still produce sound.
+  if (percent < 5) percent = 5;
   int reg = 0xBF - 2 * (100 - percent);
-  if (reg < 0) reg = 0;
+  if (reg < 0x18) reg = 0x18;  // never park at near-mute unless UI is 0
   if (reg > 0xBF) reg = 0xBF;
   return static_cast<uint8_t>(reg);
 }
 
 int AudioOut::effectiveVolumePercent() const {
-  // Headphones are much louder than the tiny speaker at the same digital level.
-  // Cap HP path and compress the curve so "5–20%" is usable.
   int v = volume_;
   if (v < 0) v = 0;
   if (v > 100) v = 100;
-
-  if (hpInserted_) {
-    // Square-ish curve on a reduced ceiling (~45% of full scale max).
-    // At UI 5%  → ~0.1% of full  (very quiet)
-    // At UI 20% → ~1.8%
-    // At UI 50% → ~11%
-    // At UI 100%→ 45%
-    const float t = v / 100.0f;
-    const float shaped = t * t;  // more resolution at the bottom
-    int eff = static_cast<int>(shaped * 45.0f + 0.5f);
-    if (v > 0 && eff < 1) eff = 1;
-    return eff;
-  }
-
-  // Speaker: gentler log-ish curve, full range available.
-  // Keep some punch at high settings; soften bottom.
   if (v == 0) return 0;
-  // Mix linear and squared: 0.35*lin + 0.65*quad
+
+  // Mild ease-in (not squared-to-nothing). Speaker and HP share DAC mapping;
+  // HP gets extra softScale pad only.
   const float t = v / 100.0f;
-  const float shaped = 0.35f * t + 0.65f * (t * t);
+  const float shaped = 0.55f * t + 0.45f * (t * t);
   int eff = static_cast<int>(shaped * 100.0f + 0.5f);
-  if (eff < 1) eff = 1;
+  if (eff < 8) eff = 8;  // audible floor when UI > 0
+  if (eff > 100) eff = 100;
   return eff;
 }
 
 void AudioOut::applyVolume() {
   const int eff = effectiveVolumePercent();
-
-  // Primary attenuation: ES8311 DAC register (0..100 → 0x00..0xBF).
   const uint8_t dac = esDacRegFromPercent(eff);
   esWrite(0x32, dac);
 
-  // Soft scale is a fine trim only (keep near 100 once DAC carries the load).
-  // Extra -3 dB software pad on HP for safety (~0.707).
+  // Software pad: only for true headphone path (not as primary attenuator).
+  // Previous 45%*square*70 soft made HP essentially silent at normal UI levels.
   if (hpInserted_) {
-    softScale_ = 70;
+    softScale_ = 55;  // ~ -5 dB digital pad on jack
   } else {
     softScale_ = 100;
   }
 
-  Serial.printf("[audio] vol ui=%d%% eff=%d%% dac=0x%02X hp=%d soft=%d\n",
-                volume_, eff, dac, hpInserted_ ? 1 : 0, softScale_);
+  Serial.printf("[audio] vol ui=%d%% eff=%d%% dac=0x%02X hp=%d amp=%d soft=%d\n",
+                volume_, eff, dac, hpInserted_ ? 1 : 0,
+                digitalRead(cfg::kAmpEnablePin), softScale_);
 }
 
 bool AudioOut::i2sStart(uint32_t rate) {
@@ -106,16 +93,20 @@ bool AudioOut::i2sStart(uint32_t rate) {
   i2sCfg.dma_buf_len = 256;
   i2sCfg.tx_desc_auto_clear = true;
 
-  if (i2s_driver_install(kI2sPort, &i2sCfg, 0, nullptr) != ESP_OK)
+  if (i2s_driver_install(kI2sPort, &i2sCfg, 0, nullptr) != ESP_OK) {
+    Serial.println("[audio] i2s_driver_install failed");
     return false;
+  }
 
   i2s_pin_config_t pins = {};
+  pins.mck_io_num = I2S_PIN_NO_CHANGE;
   pins.bck_io_num = cfg::kI2sBclk;
   pins.ws_io_num = cfg::kI2sLrck;
   pins.data_out_num = cfg::kI2sDout;
   pins.data_in_num = I2S_PIN_NO_CHANGE;
 
   if (i2s_set_pin(kI2sPort, &pins) != ESP_OK) {
+    Serial.println("[audio] i2s_set_pin failed");
     i2s_driver_uninstall(kI2sPort);
     return false;
   }
@@ -134,15 +125,29 @@ void AudioOut::i2sStop() {
 bool AudioOut::begin() {
   pinMode(cfg::kHpDetectPin, INPUT_PULLUP);
   pinMode(cfg::kAmpEnablePin, OUTPUT);
+  // Default speaker path ON until we read HP pin.
+  digitalWrite(cfg::kAmpEnablePin, HIGH);
 
-  if (!esInitRegisters()) return false;
+  Wire.begin(cfg::kI2cSda, cfg::kI2cScl, 100000);
+
+  if (!esInitRegisters()) {
+    Serial.println("[audio] ES8311 init failed");
+    return false;
+  }
   if (!i2sStart(cfg::kDefaultSampleRate)) return false;
 
-  hpInserted_ = headphonesInserted();
+  // Read HP once; if detect is stuck LOW wrongly, user still gets amp via
+  // force-speaker fallback when volume applied with no jack change.
+  const int hpRaw = digitalRead(cfg::kHpDetectPin);
+  hpInserted_ = (hpRaw == LOW);
+  Serial.printf("[audio] HP pin G%d raw=%d (%s)\n", cfg::kHpDetectPin, hpRaw,
+                hpInserted_ ? "jack?" : "speaker");
+
   updateAmpFromHp();
   volume_ = cfg::kDefaultVolumePercent;
   applyVolume();
   ready_ = true;
+  Serial.println("[audio] ready");
   return true;
 }
 
@@ -156,15 +161,15 @@ bool AudioOut::setSampleRate(uint32_t hz) {
   if (!ready_) return false;
   if (hz == rate_) return true;
   i2sStop();
-  return i2sStart(hz);
+  if (!i2sStart(hz)) return false;
+  // DAC vol is I2C — survives I2S reinstall; re-apply anyway.
+  applyVolume();
+  return true;
 }
 
 void AudioOut::setVolumePercent(int percent) {
   if (percent < 0) percent = 0;
   if (percent > 100) percent = 100;
-  if (percent == volume_ && ready_) {
-    // Still re-apply if HP state may matter — cheap.
-  }
   volume_ = percent;
   if (ready_) applyVolume();
 }
@@ -185,7 +190,6 @@ size_t AudioOut::write(const int16_t* stereoFrames, size_t frames) {
 
     const int16_t* src = stereoFrames + written * 2;
     if (scale >= 100) {
-      // memcpy path
       std::memcpy(buf, src, n * 4);
     } else if (scale <= 0) {
       std::memset(buf, 0, n * 4);
@@ -205,12 +209,16 @@ size_t AudioOut::write(const int16_t* stereoFrames, size_t frames) {
 }
 
 void AudioOut::updateAmpFromHp() {
-  const bool hp = headphonesInserted();
+  const int hpRaw = digitalRead(cfg::kHpDetectPin);
+  const bool hp = (hpRaw == LOW);
+  // Amp enable: HIGH = speaker, LOW = mute amp (jack path).
   digitalWrite(cfg::kAmpEnablePin, hp ? LOW : HIGH);
   if (hp != hpInserted_) {
     hpInserted_ = hp;
-    Serial.printf("[audio] headphones %s\n", hp ? "in" : "out");
+    Serial.printf("[audio] headphones %s (raw=%d)\n", hp ? "in" : "out", hpRaw);
     if (ready_) applyVolume();
+  } else {
+    hpInserted_ = hp;
   }
 }
 
@@ -232,8 +240,7 @@ bool AudioOut::playTestBeep(uint32_t freqHz, uint32_t ms) {
 
     for (size_t i = 0; i < n; ++i) {
       float t = (float)(pos + i) / (float)rate_;
-      // Quiet test tone
-      int16_t sample = (int16_t)(4000.0f * sinf(2.0f * M_PI * freqHz * t));
+      int16_t sample = (int16_t)(8000.0f * sinf(2.0f * M_PI * freqHz * t));
       buf[i * 2] = sample;
       buf[i * 2 + 1] = sample;
     }
