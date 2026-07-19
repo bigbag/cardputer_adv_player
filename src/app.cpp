@@ -94,8 +94,12 @@ void App::flushBrowserLocation(bool showError) {
   if (!browserLocationDirty_) return;
   if (settings_.save()) {
     browserLocationDirty_ = false;
-  } else if (showError) {
-    ui_.showToast("Save fail (SD?)", millis());
+  } else {
+    // Retry after another debounce interval rather than every loop iteration.
+    browserLocationChangedAtMs_ = millis();
+    if (showError) {
+      ui_.showToast("Save fail (SD?)", millis());
+    }
   }
 }
 
@@ -169,7 +173,7 @@ void App::loop() {
   }
 
   if (browserLocationDirty_ &&
-      now - browserLocationChangedAtMs_ >= cfg::kBrowserLocationSaveDelayMs) {
+      millis() - browserLocationChangedAtMs_ >= cfg::kBrowserLocationSaveDelayMs) {
     flushBrowserLocation(false);
   }
 
@@ -419,7 +423,10 @@ void App::playSelection() {
   rememberBrowserLocation();
   Serial.printf("[app] play %s\n", absPath);
   if (player_.open(absPath)) {
+    // rememberLastPath() coalesces this with the browser save if the track
+    // changed. Flush explicitly too for reselecting the already saved track.
     rememberLastPath(absPath);
+    flushBrowserLocation(true);
     screen_ = Screen::Playing;
   }
 }
