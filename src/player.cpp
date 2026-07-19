@@ -42,47 +42,56 @@ void Player::closeDecoder() {
 
 #ifndef UNIT_TEST
 
-bool Player::open(const char* absPath) {
-  stop();
-  if (!out_ || !absPath) return false;
-
-  if (!openDecoder(absPath)) {
-    snprintf(lastError_, sizeof(lastError_), "Can't decode file");
-    state_ = PlayState::Error;
-    return false;
+void Player::waitTaskGone() {
+  // Audio task clears taskHandle_ then self-deletes.
+  while (taskHandle_ != nullptr) {
+    vTaskDelay(pdMS_TO_TICKS(5));
   }
+}
+
+bool Player::open(const char* absPath) {
+  if (!out_ || !absPath || absPath[0] == '\0') return false;
+
+  // Stop previous track on the audio task — do NOT open decoders on loopTask.
+  stop();
 
   std::strncpy(currentPath_, absPath, cfg::kMaxPathLen - 1);
   currentPath_[cfg::kMaxPathLen - 1] = '\0';
   path::fileName(currentName_, cfg::kMaxNameLen, absPath);
 
-  AudioFormat fmt = decoder_->format();
-  out_->setSampleRate(fmt.sampleRate);
-  out_->setVolumePercent(volume_);
-
   stopReq_.store(false);
   paused_.store(false);
   seekDeltaMs_.store(0);
   autoNextPending_.store(false);
-  state_ = PlayState::Playing;
+  state_ = PlayState::Playing;  // "opening" treated as playing for UI
 
-  xTaskCreatePinnedToCore(audioTaskThunk, "audio", cfg::kAudioTaskStack,
-                          this, cfg::kAudioTaskPrio, &taskHandle_, 1);
+  // Generous stack: minimp3 frame decode + SD read + path copies.
+  const uint32_t stackWords = cfg::kAudioTaskStack;  // bytes in config; FreeRTOS wants words
+  BaseType_t ok = xTaskCreatePinnedToCore(
+      audioTaskThunk, "audio",
+      stackWords / sizeof(StackType_t),
+      this, cfg::kAudioTaskPrio, &taskHandle_,
+      0  // core 0 — leave core 1 for loop/UI
+  );
+  if (ok != pdPASS) {
+    taskHandle_ = nullptr;
+    state_ = PlayState::Error;
+    snprintf(lastError_, sizeof(lastError_), "No task mem");
+    return false;
+  }
   return true;
 }
 
 void Player::stop() {
-  if (taskHandle_) {
+  if (taskHandle_ != nullptr) {
     stopReq_.store(true);
-    while (taskHandle_) {
-      vTaskDelay(pdMS_TO_TICKS(5));
-    }
+    waitTaskGone();
   }
   closeDecoder();
   autoNextPending_.store(false);
-  state_ = PlayState::Idle;
-  currentPath_[0] = '\0';
-  currentName_[0] = '\0';
+  if (state_ != PlayState::Error) {
+    state_ = PlayState::Idle;
+  }
 }
 
 void Player::audioTaskThunk(void* arg) {
@@ -90,8 +99,30 @@ void Player::audioTaskThunk(void* arg) {
 }
 
 void Player::audioTaskMain() {
+  // Open decoder HERE (not on loopTask) — minimp3 needs stack headroom.
+  if (!openDecoder(currentPath_)) {
+    snprintf(lastError_, sizeof(lastError_), "Can't decode");
+    state_ = PlayState::Error;
+    taskHandle_ = nullptr;
+    vTaskDelete(nullptr);
+    return;
+  }
+
+  AudioFormat fmt = decoder_->format();
+  if (fmt.sampleRate == 0) {
+    snprintf(lastError_, sizeof(lastError_), "Bad format");
+    state_ = PlayState::Error;
+    closeDecoder();
+    taskHandle_ = nullptr;
+    vTaskDelete(nullptr);
+    return;
+  }
+
+  out_->setSampleRate(fmt.sampleRate);
+  out_->setVolumePercent(volume_);
+  state_ = PlayState::Playing;
+
   constexpr size_t kBufFrames = 512;
-  int16_t buf[kBufFrames * 2];
 
   while (!stopReq_.load()) {
     if (paused_.load()) {
@@ -108,10 +139,10 @@ void Player::audioTaskMain() {
     }
 
     size_t got = 0;
-    DecodeStatus st = decoder_->decode(buf, kBufFrames, &got);
+    DecodeStatus st = decoder_->decode(pcmBuf_, kBufFrames, &got);
 
     if (got > 0) {
-      out_->write(buf, got);
+      out_->write(pcmBuf_, got);
     }
 
     if (st == DecodeStatus::Finished) {
@@ -124,8 +155,13 @@ void Player::audioTaskMain() {
       state_ = PlayState::Error;
       break;
     }
+    // NeedMore with no samples: yield briefly
+    if (got == 0) {
+      vTaskDelay(pdMS_TO_TICKS(1));
+    }
   }
 
+  closeDecoder();
   taskHandle_ = nullptr;
   vTaskDelete(nullptr);
 }

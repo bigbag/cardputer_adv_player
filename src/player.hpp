@@ -31,6 +31,7 @@ class Player {
 #ifndef UNIT_TEST
   static void audioTaskThunk(void* arg);
   void audioTaskMain();
+  void waitTaskGone();
 #endif
   bool openDecoder(const char* path);
   void closeDecoder();
@@ -48,6 +49,8 @@ class Player {
   std::atomic<bool> paused_{false};
   std::atomic<int32_t> seekDeltaMs_{0};
   std::atomic<bool> autoNextPending_{false};
+  // PCM buffer lives with the task (not on loopTask stack).
+  int16_t pcmBuf_[512 * 2]{};
 #endif
 
   volatile PlayState state_ = PlayState::Idle;

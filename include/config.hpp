@@ -53,7 +53,8 @@ constexpr uint32_t kToastMs = 1500;
 
 // Audio task / buffers
 constexpr uint32_t kDefaultSampleRate = 44100;
-constexpr int kAudioTaskStack = 8192;
+// Bytes for xTaskCreate stack (minimp3 + SD + path work on this task).
+constexpr int kAudioTaskStack = 24576;
 #ifndef UNIT_TEST
 constexpr UBaseType_t kAudioTaskPrio = 5;
 #else

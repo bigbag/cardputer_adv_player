@@ -56,9 +56,10 @@ bool Mp3Decoder::open(const char* path) {
   size_t rd = p->file.read(p->inBuf, cfg::kCompressedBuf);
   p->inBufUsed = rd;
 
-  mp3d_sample_t pcm[MINIMP3_MAX_SAMPLES_PER_FRAME];
+  // Keep large PCM off the caller's stack (was blowing loopTask canary).
+  static mp3d_sample_t s_pcm[MINIMP3_MAX_SAMPLES_PER_FRAME];
   mp3dec_frame_info_t info{};
-  int samples = mp3dec_decode_frame(&p->dec, p->inBuf, static_cast<int>(p->inBufUsed), pcm, &info);
+  int samples = mp3dec_decode_frame(&p->dec, p->inBuf, static_cast<int>(p->inBufUsed), s_pcm, &info);
 
   if (info.frame_bytes == 0 || info.hz == 0) {
     p->file.close();
@@ -85,11 +86,11 @@ bool Mp3Decoder::open(const char* path) {
     size_t frames = static_cast<size_t>(samples);
     if (p->srcChannels == 1) {
       for (size_t i = 0; i < frames; i++) {
-        p->pcmLeftover[i * 2] = pcm[i];
-        p->pcmLeftover[i * 2 + 1] = pcm[i];
+        p->pcmLeftover[i * 2] = s_pcm[i];
+        p->pcmLeftover[i * 2 + 1] = s_pcm[i];
       }
     } else {
-      std::memcpy(p->pcmLeftover, pcm, frames * 2 * sizeof(mp3d_sample_t));
+      std::memcpy(p->pcmLeftover, s_pcm, frames * 2 * sizeof(mp3d_sample_t));
     }
     p->leftoverFrames = frames;
     p->leftoverOffset = 0;
@@ -139,9 +140,9 @@ DecodeStatus Mp3Decoder::decode(int16_t* outStereo, size_t maxFrames, size_t* go
 
     if (d.inBufUsed == 0) break;
 
-    mp3d_sample_t pcm[MINIMP3_MAX_SAMPLES_PER_FRAME];
+    static mp3d_sample_t s_pcm[MINIMP3_MAX_SAMPLES_PER_FRAME];
     mp3dec_frame_info_t info{};
-    int samples = mp3dec_decode_frame(&d.dec, d.inBuf, static_cast<int>(d.inBufUsed), pcm, &info);
+    int samples = mp3dec_decode_frame(&d.dec, d.inBuf, static_cast<int>(d.inBufUsed), s_pcm, &info);
 
     if (info.frame_bytes == 0) break;
 
@@ -153,11 +154,11 @@ DecodeStatus Mp3Decoder::decode(int16_t* outStereo, size_t maxFrames, size_t* go
       size_t frames = static_cast<size_t>(samples);
       if (d.srcChannels == 1) {
         for (size_t i = 0; i < frames; i++) {
-          d.pcmLeftover[i * 2] = pcm[i];
-          d.pcmLeftover[i * 2 + 1] = pcm[i];
+          d.pcmLeftover[i * 2] = s_pcm[i];
+          d.pcmLeftover[i * 2 + 1] = s_pcm[i];
         }
       } else {
-        std::memcpy(d.pcmLeftover, pcm, frames * 2 * sizeof(mp3d_sample_t));
+        std::memcpy(d.pcmLeftover, s_pcm, frames * 2 * sizeof(mp3d_sample_t));
       }
       d.leftoverFrames = frames;
       d.leftoverOffset = 0;
