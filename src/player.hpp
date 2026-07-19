@@ -27,9 +27,6 @@ class Player {
   void service();
   void setAutoNext(bool on) { autoNextEnabled_ = on; }
   bool autoNext() const { return autoNextEnabled_; }
-  void setRoute(OutputRoute r);
-  OutputRoute route() const;
-  void toggleRoute();
   PlayerSnapshot snapshot() const;
   bool takeError(char* buf, size_t cap);
 

@@ -204,18 +204,6 @@ void Player::adjustVolume(int deltaPercent) {
   setVolumePercent(volume_ + deltaPercent);
 }
 
-void Player::setRoute(OutputRoute r) {
-  if (out_) out_->setRoute(r);
-}
-
-OutputRoute Player::route() const {
-  return out_ ? out_->route() : OutputRoute::Speaker;
-}
-
-void Player::toggleRoute() {
-  if (out_) out_->toggleRoute();
-}
-
 
 void Player::service() {
 #ifndef UNIT_TEST
@@ -243,7 +231,6 @@ PlayerSnapshot Player::snapshot() const {
   std::strncpy(s.fileName, currentName_, cfg::kMaxNameLen - 1);
   s.fileName[cfg::kMaxNameLen - 1] = '\0';
   s.volumePercent = volume_;
-  s.route = out_ ? out_->route() : OutputRoute::Speaker;
   if (decoder_) {
     s.positionMs = decoder_->positionMs();
     AudioFormat fmt = decoder_->format();

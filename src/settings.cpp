@@ -11,7 +11,6 @@ static constexpr const char* kNs = "mp3player";
 
 void Settings::load() {
   volume_ = cfg::kDefaultVolumePercent;
-  route_ = OutputRoute::Speaker;
   brightness_ = cfg::kDisplayBrightness;
   displayTimeoutMs_ = cfg::kDisplayTimeoutMs;
   autoNext_ = true;
@@ -22,13 +21,11 @@ void Settings::load() {
   if (!prefs.begin(kNs, true)) {
     return;
   }
-  // Prefer new single "vol"; fall back to old volSpk if present.
   if (prefs.isKey("vol")) {
     volume_ = prefs.getInt("vol", volume_);
   } else if (prefs.isKey("volSpk")) {
     volume_ = prefs.getInt("volSpk", volume_);
   }
-  route_ = prefs.getUChar("route", 0) ? OutputRoute::Headphone : OutputRoute::Speaker;
   brightness_ = prefs.getUChar("bright", brightness_);
   displayTimeoutMs_ = prefs.getUInt("timeout", displayTimeoutMs_);
   autoNext_ = prefs.getBool("autonext", autoNext_);
@@ -45,7 +42,6 @@ void Settings::save() const {
 #ifndef UNIT_TEST
   if (!prefs.begin(kNs, false)) return;
   prefs.putInt("vol", volume_);
-  prefs.putUChar("route", route_ == OutputRoute::Headphone ? 1 : 0);
   prefs.putUChar("bright", brightness_);
   prefs.putUInt("timeout", displayTimeoutMs_);
   prefs.putBool("autonext", autoNext_);
@@ -57,7 +53,6 @@ void Settings::save() const {
 SettingsSnapshot Settings::snapshot() const {
   SettingsSnapshot s{};
   s.volumePercent = volume_;
-  s.route = route_;
   s.brightness = brightness_;
   s.displayTimeoutMs = displayTimeoutMs_;
   s.autoNext = autoNext_;
@@ -73,13 +68,6 @@ void Settings::setVolumePercent(int v) {
 }
 
 void Settings::adjustVolume(int delta) { setVolumePercent(volume_ + delta); }
-
-void Settings::setRoute(OutputRoute r) { route_ = r; }
-
-void Settings::toggleRoute() {
-  route_ = (route_ == OutputRoute::Headphone) ? OutputRoute::Speaker
-                                              : OutputRoute::Headphone;
-}
 
 void Settings::setBrightness(uint8_t b) { brightness_ = b; }
 
@@ -129,11 +117,10 @@ void Settings::moveCursor(int delta) {
 const char* Settings::label(size_t index) const {
   switch (index) {
     case 0: return "Theme";
-    case 1: return "Output";
-    case 2: return "Volume";
-    case 3: return "Brightness";
-    case 4: return "Scr timeout";
-    case 5: return "Auto-next";
+    case 1: return "Volume";
+    case 2: return "Brightness";
+    case 3: return "Scr timeout";
+    case 4: return "Auto-next";
     default: return "?";
   }
 }
@@ -145,23 +132,20 @@ void Settings::formatValue(size_t index, char* buf, size_t cap) const {
       snprintf(buf, cap, "%s", themes::name(themeIndex_));
       break;
     case 1:
-      snprintf(buf, cap, "%s", route_ == OutputRoute::Headphone ? "HP" : "Spk");
-      break;
-    case 2:
       snprintf(buf, cap, "%d%%", volume_);
       break;
-    case 3:
+    case 2:
       snprintf(buf, cap, "%d%%",
                static_cast<int>((static_cast<int>(brightness_) * 100 + 127) / 255));
       break;
-    case 4:
+    case 3:
       if (displayTimeoutMs_ == 0) {
         snprintf(buf, cap, "never");
       } else {
         snprintf(buf, cap, "%lus", static_cast<unsigned long>(displayTimeoutMs_ / 1000));
       }
       break;
-    case 5:
+    case 4:
       snprintf(buf, cap, "%s", autoNext_ ? "ON" : "OFF");
       break;
     default:

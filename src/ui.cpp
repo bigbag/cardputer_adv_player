@@ -68,7 +68,7 @@ bool Ui::browseChanged(const BrowseSnapshot& b) const {
 bool Ui::playerChromeChanged(const PlayerSnapshot& p) const {
   if (!hasLastPlayer_) return true;
   if (p.state != lastPlayer_.state) return true;
-  if (p.volumePercent != lastPlayer_.volumePercent || p.route != lastPlayer_.route) return true;
+  if (p.volumePercent != lastPlayer_.volumePercent) return true;
   if (std::strcmp(p.fileName, lastPlayer_.fileName) != 0) return true;
   return false;
 }
@@ -84,7 +84,6 @@ bool Ui::settingsChanged(const Settings& s) const {
   if (!hasLastSettings_) return true;
   SettingsSnapshot cur = s.snapshot();
   return cur.volumePercent != lastSettings_.volumePercent ||
-         cur.route != lastSettings_.route ||
          cur.brightness != lastSettings_.brightness ||
          cur.displayTimeoutMs != lastSettings_.displayTimeoutMs ||
          cur.autoNext != lastSettings_.autoNext ||
@@ -379,11 +378,11 @@ void Ui::drawPlaying(const PlayerSnapshot& p, bool full) {
   if (full || p.volumePercent != lastPlayer_.volumePercent) {
     d.fillRect(0, 74, 110, 12, theme_.bg);
     char volBuf[16];
-    snprintf(volBuf, sizeof(volBuf), "%s %d%%", (p.route == OutputRoute::Headphone) ? "HP" : "Spk", p.volumePercent);
+    snprintf(volBuf, sizeof(volBuf), "Vol %d%%", p.volumePercent);
     d.drawString(volBuf, 4, 74);
   }
 
-  drawHint("Spc pause  ,/ vol  H out");
+  drawHint("Spc pause  ,/ vol  S set");
 }
 
 void Ui::drawSettings(const Settings& s) {

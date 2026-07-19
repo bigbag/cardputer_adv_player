@@ -16,9 +16,7 @@ constexpr int kI2cSda = 8;
 constexpr int kI2cScl = 9;
 
 // ES8311 / I2S (Cardputer-ADV)
-// Schematic: G41=BCLK, G43=LRCK, G42=DSDIN(DAC), G46=ASDOUT(ADC only).
-// NS4150B AMP_EN is driven by the 3.5mm jack MOSFET (Q4) — NOT an ESP32 GPIO.
-// There is no MCU headphone-detect pin; speaker mute on plug is hardware-only.
+// G41=BCLK, G43=LRCK, G42=DSDIN. Jack mutes speaker in hardware (no MCU detect).
 constexpr int kI2sBclk = 41;
 constexpr int kI2sLrck = 43;
 constexpr int kI2sDout = 42;
@@ -30,15 +28,13 @@ constexpr int kSdCs = 12;
 constexpr int kSdMosi = 14;
 constexpr int kSdSck = 40;
 constexpr int kSdMiso = 39;
-// Start conservative; many microSD cards fail mount at 15–25 MHz on this bus.
 constexpr uint32_t kSdSpiHz = 4000000;
 
-// UI layout (colors live in theme.hpp / Settings)
+// UI layout
 constexpr int kHintBarH = 12;
 constexpr int kListRowH = 14;
 constexpr int kMaxVisibleRows = 7;
 constexpr uint8_t kDisplayBrightness = 128;
-// Dim/off backlight after this many ms with no key activity (audio keeps playing).
 constexpr uint32_t kDisplayTimeoutMs = 10000;
 
 // Browser / player
@@ -47,16 +43,19 @@ constexpr size_t kMaxPathLen = 256;
 constexpr size_t kMaxNameLen = 64;
 constexpr int kVolumeStepPercent = 5;
 constexpr int kSeekStepSeconds = 5;
-// Single UI volume (0..100). Headphone profile applies kHpAttenPercent.
-constexpr int kDefaultVolumePercent = 50;
-// When Output=HP, digital level is scaled by this percent of speaker level.
-// e.g. Vol 50 → speaker 50%, HP ≈ 50 * 40 / 100 = 20% amplitude (before vol^2).
-constexpr int kHpAttenPercent = 40;
+// Start mid-low: ok-ish on jack; raise for speaker.
+constexpr int kDefaultVolumePercent = 45;
 constexpr uint32_t kToastMs = 1500;
 
-// Audio task / buffers
+// Single wide volume range (no Spk/HP split — no jack detect on MCU).
+// soft% = (UI/100)^kVolCurveExp * 100, then PCM * kVolPcmBoost with clip.
+// Low UI → very quiet (headphones). High UI → boosted (tiny speaker).
+// Exp 2.0: 20→4%, 40→16%, 60→36%, 80→64%, 100→100% before boost.
+constexpr int kVolCurveExpNum = 2;     // integer exponent
+constexpr int kVolPcmBoost = 3;        // ×3 at UI 100% (speaker usable; turn down for jack)
+
+// Audio task
 constexpr uint32_t kDefaultSampleRate = 44100;
-// Bytes for xTaskCreate stack (minimp3 + SD + path work on this task).
 constexpr int kAudioTaskStack = 24576;
 #ifndef UNIT_TEST
 constexpr UBaseType_t kAudioTaskPrio = 5;

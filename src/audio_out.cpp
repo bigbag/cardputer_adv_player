@@ -8,8 +8,7 @@
 
 static constexpr i2s_port_t kI2sPort = I2S_NUM_0;
 
-// M5Unified Cardputer-ADV speaker enable (DAC 0xBF = ±0 dB).
-// Jack mutes speaker amp in hardware (MOSFET); no MCU detect pin.
+// M5Unified Cardputer-ADV ES8311 enable. DAC 0xBF = ±0 dB.
 static const uint8_t kEs8311InitSeq[][2] = {
     {0x00, 0x80},
     {0x01, 0xB5},
@@ -37,43 +36,30 @@ bool AudioOut::esInitRegisters() {
   return true;
 }
 
-// DAC stays near 0 dB; loudness is softScale (M5-style).
-uint8_t AudioOut::esDacRegFromPercent(int percent) {
-  if (percent <= 0) return 0x00;
-  if (percent > 100) percent = 100;
-  const int reg = 0xA0 + ((0xBF - 0xA0) * percent) / 100;
-  return static_cast<uint8_t>(reg);
-}
-
-// UI volume → digital amplitude %.
-// 1) optional HP attenuation coefficient
-// 2) square curve (comfortable low end, M5-like)
+// Wide diapason: soft = (UI/100)^exp * 100
+// UI 15 → ~2%, 30 → 9%, 50 → 25%, 70 → 49%, 100 → 100% (before boost)
 int AudioOut::softScaleFromUi() const {
   int v = volume_;
-  if (v < 0) v = 0;
+  if (v <= 0) return 0;
   if (v > 100) v = 100;
-  if (v == 0) return 0;
 
-  if (route_ == OutputRoute::Headphone) {
-    // Same UI number, quieter on jack: Vol 50 → 20 before square.
-    v = (v * cfg::kHpAttenPercent) / 100;
-    if (v < 1) v = 1;
+  // Integer power: v^exp / 100^(exp-1)
+  int32_t p = v;
+  for (int e = 1; e < cfg::kVolCurveExpNum; ++e) {
+    p = (p * v) / 100;
   }
-
-  int sq = (v * v) / 100;
-  if (sq < 1) sq = 1;
-  return sq;
+  if (p < 1) p = 1;
+  if (p > 100) p = 100;
+  return static_cast<int>(p);
 }
 
 void AudioOut::applyVolume() {
   softScale_ = softScaleFromUi();
-  // DAC tracks UI volume lightly (not the attenuated path).
-  const uint8_t dac = esDacRegFromPercent(volume_);
-  esWrite(0x32, dac);
+  esWrite(0x32, 0xBF);  // fixed 0 dB; range is all digital
 
-  Serial.printf("[audio] route=%s ui=%d%% soft=%d%% dac=0x%02X hpAtten=%d\n",
-                route_ == OutputRoute::Headphone ? "HP" : "SPK", volume_,
-                softScale_, dac, cfg::kHpAttenPercent);
+  const int mul = softScale_ * cfg::kVolPcmBoost;
+  Serial.printf("[audio] ui=%d%% soft=%d%% pcmMul=%d (boost×%d)\n", volume_,
+                softScale_, mul, cfg::kVolPcmBoost);
 }
 
 bool AudioOut::i2sStart(uint32_t rate) {
@@ -128,10 +114,10 @@ bool AudioOut::begin() {
   if (!i2sStart(cfg::kDefaultSampleRate)) return false;
 
   volume_ = cfg::kDefaultVolumePercent;
-  route_ = OutputRoute::Speaker;
   applyVolume();
   ready_ = true;
-  Serial.println("[audio] ready — H toggles HP quieter profile");
+  Serial.printf("[audio] ready wide-range vol (exp=%d boost×%d)\n",
+                cfg::kVolCurveExpNum, cfg::kVolPcmBoost);
   return true;
 }
 
@@ -156,43 +142,31 @@ void AudioOut::setVolumePercent(int percent) {
   if (ready_) applyVolume();
 }
 
-void AudioOut::setRoute(OutputRoute r) {
-  if (r == route_) {
-    if (ready_) applyVolume();
-    return;
-  }
-  route_ = r;
-  if (ready_) applyVolume();
-  Serial.printf("[audio] profile → %s (same UI vol, HP×%d%%)\n",
-                route_ == OutputRoute::Headphone ? "HP" : "SPK",
-                cfg::kHpAttenPercent);
-}
-
-void AudioOut::toggleRoute() {
-  setRoute(route_ == OutputRoute::Headphone ? OutputRoute::Speaker
-                                            : OutputRoute::Headphone);
-}
-
 size_t AudioOut::write(const int16_t* stereoFrames, size_t frames) {
   if (!ready_ || frames == 0) return 0;
 
   constexpr size_t kChunkFrames = 128;
   int16_t buf[kChunkFrames * 2];
   size_t written = 0;
-  const int scale = softScale_;
+
+  // mul = softScale (0..100) * boost  → 0 .. 100*boost
+  const int mul = softScale_ * cfg::kVolPcmBoost;
 
   while (written < frames) {
     size_t n = frames - written;
     if (n > kChunkFrames) n = kChunkFrames;
 
     const int16_t* src = stereoFrames + written * 2;
-    if (scale <= 0) {
+    if (mul <= 0) {
       std::memset(buf, 0, n * 4);
-    } else if (scale >= 100) {
+    } else if (mul == 100) {
       std::memcpy(buf, src, n * 4);
     } else {
       for (size_t i = 0; i < n * 2; ++i) {
-        buf[i] = static_cast<int16_t>((static_cast<int32_t>(src[i]) * scale) / 100);
+        int32_t s = (static_cast<int32_t>(src[i]) * mul) / 100;
+        if (s > 32767) s = 32767;
+        if (s < -32768) s = -32768;
+        buf[i] = static_cast<int16_t>(s);
       }
     }
 
@@ -219,7 +193,7 @@ bool AudioOut::playTestBeep(uint32_t freqHz, uint32_t ms) {
 
     for (size_t i = 0; i < n; ++i) {
       float t = (float)(pos + i) / (float)rate_;
-      int16_t sample = (int16_t)(8000.0f * sinf(2.0f * M_PI * freqHz * t));
+      int16_t sample = (int16_t)(5000.0f * sinf(2.0f * M_PI * freqHz * t));
       buf[i * 2] = sample;
       buf[i * 2 + 1] = sample;
     }

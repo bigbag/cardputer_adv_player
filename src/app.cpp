@@ -12,9 +12,8 @@ void App::begin() {
   M5Cardputer.Display.setFont(&fonts::Font0);
 
   settings_.load();
-  Serial.printf("[app] board=%d vol=%d route=%s bright=%u timeout=%lu autonext=%d\n",
+  Serial.printf("[app] board=%d vol=%d bright=%u timeout=%lu autonext=%d\n",
                 static_cast<int>(M5.getBoard()), settings_.volumePercent(),
-                settings_.route() == OutputRoute::Headphone ? "HP" : "SPK",
                 settings_.brightness(),
                 static_cast<unsigned long>(settings_.displayTimeoutMs()),
                 settings_.autoNext() ? 1 : 0);
@@ -30,7 +29,6 @@ void App::begin() {
 
   applySettings();
   player_.setVolumePercent(settings_.volumePercent());
-  player_.setRoute(settings_.route());
 
   lastActivityMs_ = millis();
   ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, lastActivityMs_, true);
@@ -38,7 +36,6 @@ void App::begin() {
 
 void App::applySettings() {
   player_.setVolumePercent(settings_.volumePercent());
-  player_.setRoute(settings_.route());
   player_.setAutoNext(settings_.autoNext());
   ui_.setBrightness(settings_.brightness());
   if (ui_.displayOn()) {
@@ -127,13 +124,6 @@ void App::handle(Action a) {
 
 void App::handleBrowse(Action a) {
   switch (a) {
-    case Action::ToggleOutput: {
-      player_.toggleRoute();
-      settings_.setRoute(player_.route());
-      ui_.showToast(player_.route() == OutputRoute::Headphone ? "HP quieter" : "Spk normal",
-                    millis());
-      break;
-    }
     case Action::Up:
       browser_.moveCursor(-1);
       break;
@@ -184,13 +174,6 @@ void App::handlePlaying(Action a) {
       player_.adjustVolume(-cfg::kVolumeStepPercent);
       settings_.setVolumePercent(player_.volumePercent());
       break;
-    case Action::ToggleOutput: {
-      player_.toggleRoute();
-      settings_.setRoute(player_.route());
-      ui_.showToast(player_.route() == OutputRoute::Headphone ? "HP quieter" : "Spk normal",
-                    millis());
-      break;
-    }
     case Action::SeekFwd:
       player_.seekRelative(cfg::kSeekStepSeconds);
       break;
@@ -218,20 +201,16 @@ void App::handleSettings(Action a) {
       switch (settings_.cursor()) {
         case 0: settings_.cycleTheme(+1); break;
         case 1:
-          settings_.toggleRoute();
-          player_.setRoute(settings_.route());
-          break;
-        case 2:
           settings_.adjustVolume(+cfg::kVolumeStepPercent);
           player_.setVolumePercent(settings_.volumePercent());
           break;
-        case 3:
+        case 2:
           settings_.adjustBrightness(+15);
           ui_.setBrightness(settings_.brightness());
           M5Cardputer.Display.setBrightness(settings_.brightness());
           break;
-        case 4: settings_.cycleDisplayTimeout(); break;
-        case 5:
+        case 3: settings_.cycleDisplayTimeout(); break;
+        case 4:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
           break;
@@ -243,25 +222,21 @@ void App::handleSettings(Action a) {
       switch (settings_.cursor()) {
         case 0: settings_.cycleTheme(-1); break;
         case 1:
-          settings_.toggleRoute();
-          player_.setRoute(settings_.route());
-          break;
-        case 2:
           settings_.adjustVolume(-cfg::kVolumeStepPercent);
           player_.setVolumePercent(settings_.volumePercent());
           break;
-        case 3:
+        case 2:
           settings_.adjustBrightness(-15);
           ui_.setBrightness(settings_.brightness());
           M5Cardputer.Display.setBrightness(settings_.brightness());
           break;
-        case 4:
+        case 3:
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
           break;
-        case 5:
+        case 4:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
           break;
@@ -272,21 +247,13 @@ void App::handleSettings(Action a) {
     case Action::Space:
       switch (settings_.cursor()) {
         case 0: settings_.cycleTheme(+1); break;
-        case 1:
-          settings_.toggleRoute();
-          player_.setRoute(settings_.route());
-          break;
-        case 4: settings_.cycleDisplayTimeout(); break;
-        case 5:
+        case 3: settings_.cycleDisplayTimeout(); break;
+        case 4:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
           break;
         default: break;
       }
-      break;
-    case Action::ToggleOutput:
-      settings_.toggleRoute();
-      player_.setRoute(settings_.route());
       break;
     case Action::Back:
     case Action::Settings:
