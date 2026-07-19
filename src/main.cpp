@@ -1,4 +1,8 @@
 #include <M5Cardputer.h>
+#include "audio_out.hpp"
+#include "config.hpp"
+
+static AudioOut audioOut;
 
 void setup() {
   auto cfg = M5.config();
@@ -10,10 +14,17 @@ void setup() {
   M5Cardputer.Display.setTextSize(1);
   M5Cardputer.Display.setCursor(4, 4);
   M5Cardputer.Display.println("cardputer_asv_mp3");
-  M5Cardputer.Display.println("scaffold ok");
+
+  if (audioOut.begin()) {
+    M5Cardputer.Display.println("audio: ok");
+    if (cfg::kBootBeep) audioOut.playTestBeep(440, 300);
+  } else {
+    M5Cardputer.Display.println("audio: FAIL");
+  }
 }
 
 void loop() {
   M5Cardputer.update();
+  audioOut.updateAmpFromHp();
   delay(50);
 }
