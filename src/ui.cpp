@@ -87,6 +87,7 @@ bool Ui::settingsChanged(const Settings& s) const {
          cur.brightness != lastSettings_.brightness ||
          cur.displayTimeoutMs != lastSettings_.displayTimeoutMs ||
          cur.autoNext != lastSettings_.autoNext ||
+         cur.onBoot != lastSettings_.onBoot ||
          cur.themeIndex != lastSettings_.themeIndex ||
          cur.cursor != lastSettings_.cursor;
 }
