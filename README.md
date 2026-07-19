@@ -1,4 +1,4 @@
-# cardputer_asv_mp3
+# Cardputer Player
 
 Minimal MP3/WAV player for **M5Stack Cardputer-ADV** (ESP32-S3 / Stamp-S3A).
 
@@ -79,6 +79,12 @@ Practical tips if you see **No SD card**:
 
 Any folder tree works; the browser starts at SD root. Hidden `.*` names are skipped.
 
+Settings live on the card in a hidden directory:
+
+```text
+/.asvmp3/config.cfg
+```
+
 ## Controls
 
 Authoritative map (matches firmware `src/input.cpp`):
@@ -90,83 +96,86 @@ Authoritative map (matches firmware `src/input.cpp`):
     ,  .  /     left  down  right
 ```
 
-| Key | Meaning |
-|-----|--------|
-| `;` | **Up** |
-| `.` | **Down** |
-| `,` | **Left** = decrease / vol down |
-| `/` | **Right** = increase / vol up |
+- **`;`** — Up (browse) / previous track (playing)
+- **`.`** — Down (browse) / next track (playing)
+- **`,`** — Left = decrease / volume down
+- **`/`** — Right = increase / volume up
 
 ### Browse
 
-| Key | Action |
-|-----|--------|
-| `;` / `.` | Cursor up / down |
-| `Enter` | Open folder or play file |
-| `Space` | Play highlighted audio file |
-| `S` or `Tab` | **Settings** |
-| `Backspace` or `` ` `` | Parent directory |
-| `Enter` when no SD | Retry mount |
+- **`;` / `.`** — Cursor up / down
+- **`Enter`** — Open folder or play file
+- **`Space`** — Play highlighted audio file
+- **`S` or `Tab`** — Settings
+- **`Backspace` or `` ` ``** — Parent directory
+- **`Enter` when no SD** — Retry mount
 
 > No Esc on Cardputer — use **Backspace** (or `` ` ``) for Back.
 
 ### Now Playing
 
-| Key | Action |
-|-----|--------|
-| `Space` | Play / pause |
-| `,` | Volume down |
-| `/` | Volume up |
-| `[` / `]` | Seek −/+ ~5 s |
-| `S` or `Tab` | **Settings** |
-| `Backspace` | Back to browse (audio keeps playing) |
+- **`Space`** — Play / pause
+- **`;`** — Previous track (restart current if >3 s in; else previous file)
+- **`.`** — Next track in folder (`N` / `P` aliases also work)
+- **`,`** — Volume down
+- **`/`** — Volume up
+- **`[` / `]`** — Seek −/+ ~5 s
+- **`S` or `Tab`** — Settings
+- **`Backspace`** — Back to browse (audio keeps playing)
 
 ### Settings (`S` / Tab)
 
-| Item | Left `,` / Right `/` |
-|------|----------------------|
-| Theme | Phosphor / Amber / Cyan / Paper |
-| Volume | 0–100% wide curve (low=quiet jack, high=louder speaker) |
-| Brightness | dimmer / brighter |
-| Scr timeout | 5s / 10s / 30s / 60s / never |
-| Auto-next | ON / OFF |
+Rows (change with `,` / `/`):
 
-| Key | Action |
-|-----|--------|
-| `;` / `.` | Move row |
-| `,` / `/` | Decrease / increase |
-| `Enter` | Toggle timeout / auto-next |
-| `Backspace` / `S` | Save & exit |
+- **Theme** — Phosphor / Amber / Cyan / Paper
+- **Volume** — 0–100% wide curve (low = quiet jack, high = louder speaker)
+- **Brightness** — dimmer / brighter
+- **Scr timeout** — 5s / 10s / 30s / 60s / never
+- **Auto-next** — ON / OFF
 
-Jack mutes the speaker in **hardware**. There is **one Volume** with a wide range: use **low** levels with headphones, **higher** levels for the built-in speaker. Saved in NVS.
+Keys:
+
+- **`;` / `.`** — Move row
+- **`,` / `/`** — Decrease / increase
+- **`Enter` / `Space`** — Cycle theme / timeout / auto-next
+- **`Backspace` / `S`** — Exit (values already auto-saved on each change)
+
+Jack mutes the speaker in **hardware**. There is **one Volume** with a wide range: use
+**low** levels with headphones, **higher** levels for the built-in speaker.
+
+Settings (including last played path) auto-save to `/.asvmp3/config.cfg` on change.
+After reboot the last track is restored and playback starts if the file still exists.
 
 Starting another file from Browse replaces the current track. When a track ends, the
 next audio file in the **same folder** auto-plays; if none remain, status shows `DONE`.
 
 ## Display
 
-- Backlight turns **off after 10 seconds** with no key presses (audio keeps playing).
+- Backlight turns **off after the configured timeout** with no key presses (audio keeps
+  playing). Default 10 s; set to **never** in Settings if you prefer.
 - Any key wakes the screen; the same key is also handled normally.
 - Playing screen updates the time/progress bar without full-screen redraws (less blink).
 
 ## Audio notes
 
 - Formats: MP3 (minimp3), WAV PCM 16-bit mono/stereo
-- Output: ES8311 + I2S; amp enable / headphone detect handled in software
-- Plugging headphones should mute the speaker amp
+- Output: ES8311 + I2S
+- Jack mute is **hardware** (no MCU detect pin); one software volume curve for both paths
 
 ## On-device checklist
 
-1. Boot with no SD → clear “No SD” UI; Enter retries  
-2. Nested folders; parent at root stays root  
-3. Play MP3 44.1 kHz and 48 kHz if available  
-4. Play 16-bit WAV mono/stereo  
-5. Reject bad/non-PCM WAV with toast  
-6. Pause / resume, volume, seek  
-7. Auto-next within folder; last file → DONE  
-8. Esc to Browse while audio continues; open new file switches track  
-9. Headphone jack mutes speaker amp  
-10. Serial 115200 shows mount/open/errors  
+1. Boot with no SD → clear “No SD” UI; Enter retries
+2. Nested folders; parent at root stays root
+3. Play MP3 44.1 kHz and 48 kHz if available
+4. Play 16-bit WAV mono/stereo
+5. Reject bad/non-PCM WAV with toast
+6. Pause / resume, volume, seek, next/prev track
+7. Auto-next within folder; last file → DONE
+8. Backspace to Browse while audio continues; open new file switches track
+9. Headphone jack mutes speaker amp
+10. Settings survive reboot (`/.asvmp3/config.cfg`)
+11. Last track resumes after reboot
+12. Serial 115200 shows mount/open/errors
 
 **Hardware validation status:** host tests and firmware build pass; full on-device
 checklist not yet signed off in this environment.
@@ -185,16 +194,16 @@ platformio.ini    cardputer-adv + native envs
 
 ## Architecture (short)
 
-| Module | Role |
-|--------|------|
-| `App` | Browse ↔ Playing state machine |
-| `SdBrowser` | SD mount + directory listing |
-| `Player` | FreeRTOS decode task, auto-next |
-| `AudioOut` | ES8311 + I2S + amp/HP |
-| `Mp3Decoder` / `WavDecoder` | Decode to stereo PCM |
-| `Ui` / `Input` | Terminal UI + keys |
+- **`App`** — Browse ↔ Playing ↔ Settings state machine
+- **`SdBrowser`** — SD mount + directory listing (`readdir`)
+- **`Player`** — FreeRTOS decode task, auto-next, next/prev
+- **`AudioOut`** — ES8311 + I2S + volume curve
+- **`Mp3Decoder` / `WavDecoder`** — Decode to stereo PCM
+- **`Settings`** — SD config file load/save
+- **`Ui` / `Input`** — Terminal UI + keys
 
-## Spec / plan
+## Spec / plan / architecture
 
+- Audio & device architecture: `docs/architecture-audio.md`
 - Design: `docs/superpowers/specs/2026-07-19-cardputer-adv-mp3-player-design.md`
 - Plan: `docs/superpowers/plans/2026-07-19-cardputer-adv-mp3-player.md`
