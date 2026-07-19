@@ -23,6 +23,7 @@ void Settings::applyDefaults() {
   themeIndex_ = 0;
   cursor_ = 0;
   lastPath_[0] = '\0';
+  browserLocation_ = {};
 }
 
 void Settings::setLastPath(const char* absPath) {
@@ -30,6 +31,19 @@ void Settings::setLastPath(const char* absPath) {
   if (std::strcmp(lastPath_, absPath) == 0) return;
   std::strncpy(lastPath_, absPath, cfg::kMaxPathLen - 1);
   lastPath_[cfg::kMaxPathLen - 1] = '\0';
+}
+
+void Settings::setBrowserLocation(const BrowserLocation& location) {
+  if (location.path[0] == '/') {
+    std::strncpy(browserLocation_.path, location.path,
+                 sizeof(browserLocation_.path) - 1);
+  } else {
+    browserLocation_.path[0] = '\0';
+  }
+  browserLocation_.path[sizeof(browserLocation_.path) - 1] = '\0';
+  std::strncpy(browserLocation_.item, location.item,
+               sizeof(browserLocation_.item) - 1);
+  browserLocation_.item[sizeof(browserLocation_.item) - 1] = '\0';
 }
 
 void Settings::clamp() {
@@ -120,6 +134,16 @@ bool Settings::parseLine(const char* line) {
     } else {
       lastPath_[0] = '\0';
     }
+  } else if (std::strcmp(key, "browser_path") == 0) {
+    if (val[0] == '/') {
+      std::strncpy(browserLocation_.path, val, sizeof(browserLocation_.path) - 1);
+      browserLocation_.path[sizeof(browserLocation_.path) - 1] = '\0';
+    } else {
+      browserLocation_.path[0] = '\0';
+    }
+  } else if (std::strcmp(key, "browser_item") == 0) {
+    std::strncpy(browserLocation_.item, val, sizeof(browserLocation_.item) - 1);
+    browserLocation_.item[sizeof(browserLocation_.item) - 1] = '\0';
   } else {
     return false;
   }
@@ -243,6 +267,10 @@ bool Settings::save() {
   ok = ok && wr(line);
   std::snprintf(line, sizeof(line), "last_path=%s\n", lastPath_);
   ok = ok && wr(line);
+  std::snprintf(line, sizeof(line), "browser_path=%s\n", browserLocation_.path);
+  ok = ok && wr(line);
+  std::snprintf(line, sizeof(line), "browser_item=%s\n", browserLocation_.item);
+  ok = ok && wr(line);
 
   f.flush();
 #if defined(ESP32)
@@ -251,7 +279,7 @@ bool Settings::save() {
   const size_t sz = f.size();
   f.close();
 
-  // Minimum plausible size (header + 5 keys).
+  // Minimum plausible size (header plus settings keys).
   constexpr size_t kMinBytes = 40;
   if (!ok || written < kMinBytes || sz < kMinBytes) {
     Serial.printf("[cfg] SAVE FAIL short write %u/%u — discard tmp\n",

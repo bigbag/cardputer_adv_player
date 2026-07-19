@@ -42,6 +42,9 @@ class Settings {
   const char* lastPath() const { return lastPath_; }
   void setLastPath(const char* absPath);  // no-op if unchanged
 
+  const BrowserLocation& browserLocation() const { return browserLocation_; }
+  void setBrowserLocation(const BrowserLocation& location);
+
   static constexpr size_t kCount = 6;
   size_t cursor() const { return cursor_; }
   void moveCursor(int delta);
@@ -65,4 +68,5 @@ class Settings {
   size_t themeIndex_ = 0;
   size_t cursor_ = 0;
   char lastPath_[cfg::kMaxPathLen]{};
+  BrowserLocation browserLocation_{};
 };
