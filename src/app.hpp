@@ -23,6 +23,8 @@ class App {
   void closeSettings();
   void applySettings();
   void persistSettings();  // apply + write SD immediately
+  void rememberLastPath(const char* absPath);  // cfg last_path + save
+  void resumeLastTrack();  // after boot: reveal + play if present
   void playSelection();
   void noteActivity(uint32_t nowMs);
   void updateDisplayPower(uint32_t nowMs);

@@ -20,6 +20,8 @@ class SdBrowser {
   size_t scroll() const;
   bool nextAudioAfter(const char* fileName, char* outPath, size_t outCap);
   bool prevAudioBefore(const char* fileName, char* outPath, size_t outCap);
+  // List parent of absPath and put cursor on the file. false if missing.
+  bool revealPath(const char* absPath);
   BrowseSnapshot snapshot() const;
 
  private:

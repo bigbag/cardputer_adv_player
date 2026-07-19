@@ -274,6 +274,26 @@ bool SdBrowser::nextAudioAfter(const char* fileName, char* outPath, size_t outCa
   return false;
 }
 
+bool SdBrowser::revealPath(const char* absPath) {
+  if (!absPath || absPath[0] != '/' || !sdOk_) return false;
+  if (!SD.exists(absPath)) return false;
+
+  char dir[cfg::kMaxPathLen];
+  char name[cfg::kMaxNameLen];
+  path::parent(dir, sizeof(dir), absPath);
+  path::fileName(name, sizeof(name), absPath);
+  if (name[0] == '\0') return false;
+
+  if (!openPath(dir)) return false;
+  for (size_t i = 0; i < count_; ++i) {
+    if (std::strcmp(entries_[i].name, name) == 0) {
+      setCursor(i);
+      return true;
+    }
+  }
+  return false;  // dir listed but file filtered out / gone
+}
+
 bool SdBrowser::prevAudioBefore(const char* fileName, char* outPath, size_t outCap) {
   if (!fileName || !outPath || outCap == 0 || count_ == 0) return false;
 

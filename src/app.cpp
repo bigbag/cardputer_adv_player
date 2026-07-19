@@ -37,6 +37,9 @@ void App::begin() {
     settings_.save();
   }
 
+  // Restore last played track (folder cursor + auto-play if file still exists).
+  resumeLastTrack();
+
   lastActivityMs_ = millis();
   ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, lastActivityMs_, true);
 }
@@ -68,6 +71,30 @@ void App::persistSettings() {
   }
 }
 
+void App::rememberLastPath(const char* absPath) {
+  if (!absPath || absPath[0] != '/') return;
+  const char* prev = settings_.lastPath();
+  if (prev && std::strcmp(prev, absPath) == 0) return;
+  settings_.setLastPath(absPath);
+  settings_.save();  // silent; volume path already handles toast on fail
+}
+
+void App::resumeLastTrack() {
+  if (!browser_.sdOk()) return;
+  const char* last = settings_.lastPath();
+  if (!last || last[0] != '/') return;
+
+  if (!browser_.revealPath(last)) {
+    Serial.printf("[app] last track missing: %s\n", last);
+    return;
+  }
+
+  Serial.printf("[app] resume last: %s\n", last);
+  if (player_.open(last)) {
+    screen_ = Screen::Playing;
+  }
+}
+
 void App::noteActivity(uint32_t nowMs) {
   lastActivityMs_ = nowMs;
   if (!ui_.displayOn()) {
@@ -91,6 +118,11 @@ void App::loop() {
   const uint32_t now = millis();
   M5Cardputer.update();
   player_.service();
+  // Auto-next (and any other path change) → persist last track.
+  if (screen_ == Screen::Playing) {
+    const char* p = player_.currentPath();
+    if (p && p[0] == '/') rememberLastPath(p);
+  }
 
   Action a = input_.poll(screen_);
   bool forceUi = false;
@@ -202,10 +234,14 @@ void App::handlePlaying(Action a) {
     case Action::NextTrack:
       if (!player_.nextTrack()) {
         ui_.showToast("Last track", millis());
+      } else {
+        rememberLastPath(player_.currentPath());
       }
       break;
     case Action::PrevTrack:
-      player_.prevTrack();
+      if (player_.prevTrack()) {
+        rememberLastPath(player_.currentPath());
+      }
       break;
     case Action::Back:
       screen_ = Screen::Browse;
@@ -309,6 +345,8 @@ void App::playSelection() {
   const DirEntry& e = browser_.entries()[browser_.cursor()];
   if (!path::join(absPath, sizeof(absPath), browser_.path(), e.name)) return;
   Serial.printf("[app] play %s\n", absPath);
-  player_.open(absPath);
-  screen_ = Screen::Playing;
+  if (player_.open(absPath)) {
+    rememberLastPath(absPath);
+    screen_ = Screen::Playing;
+  }
 }

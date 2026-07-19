@@ -26,6 +26,7 @@ class Player {
   void seekRelative(int deltaSeconds);
   bool nextTrack();  // next audio in current folder; false at end
   bool prevTrack();  // restart if >kPrevRestartMs, else previous track
+  const char* currentPath() const { return currentPath_; }
   void service();
   void setAutoNext(bool on) { autoNextEnabled_ = on; }
   bool autoNext() const { return autoNextEnabled_; }

@@ -21,6 +21,14 @@ void Settings::applyDefaults() {
   autoNext_ = true;
   themeIndex_ = 0;
   cursor_ = 0;
+  lastPath_[0] = '\0';
+}
+
+void Settings::setLastPath(const char* absPath) {
+  if (!absPath) absPath = "";
+  if (std::strcmp(lastPath_, absPath) == 0) return;
+  std::strncpy(lastPath_, absPath, cfg::kMaxPathLen - 1);
+  lastPath_[cfg::kMaxPathLen - 1] = '\0';
 }
 
 void Settings::clamp() {
@@ -38,7 +46,8 @@ bool Settings::parseLine(const char* line) {
   if (!eq) return false;
 
   char key[24];
-  char val[32];
+  // Paths need up to kMaxPathLen; other values are short.
+  char val[cfg::kMaxPathLen];
   size_t klen = static_cast<size_t>(eq - line);
   while (klen > 0 && std::isspace(static_cast<unsigned char>(line[klen - 1]))) --klen;
   if (klen == 0 || klen >= sizeof(key)) return false;
@@ -90,6 +99,13 @@ bool Settings::parseLine(const char* line) {
         }
       }
     }
+  } else if (std::strcmp(key, "last_path") == 0 || std::strcmp(key, "lastpath") == 0) {
+    if (val[0] == '/') {
+      std::strncpy(lastPath_, val, cfg::kMaxPathLen - 1);
+      lastPath_[cfg::kMaxPathLen - 1] = '\0';
+    } else {
+      lastPath_[0] = '\0';
+    }
   } else {
     return false;
   }
@@ -117,7 +133,7 @@ void Settings::load() {
     return;
   }
 
-  char line[96];
+  char line[cfg::kMaxPathLen + 24];
   size_t n = 0;
   int parsed = 0;
   while (f.available()) {
@@ -189,7 +205,7 @@ bool Settings::save() {
     return w == n;
   };
 
-  char line[64];
+  char line[cfg::kMaxPathLen + 24];
   bool ok = true;
   ok = ok && wr("# asvmp3 settings\n");
   std::snprintf(line, sizeof(line), "volume=%d\n", volume_);
@@ -202,6 +218,8 @@ bool Settings::save() {
   std::snprintf(line, sizeof(line), "theme=%s\n", themes::name(themeIndex_));
   ok = ok && wr(line);
   std::snprintf(line, sizeof(line), "autonext=%s\n", autoNext_ ? "on" : "off");
+  ok = ok && wr(line);
+  std::snprintf(line, sizeof(line), "last_path=%s\n", lastPath_);
   ok = ok && wr(line);
 
   f.flush();

@@ -34,6 +34,10 @@ class Settings {
   void cycleTheme(int delta);
   const Theme& theme() const { return themes::get(themeIndex_); }
 
+  // Absolute SD path of last played audio ("/Music/a.mp3"), or empty.
+  const char* lastPath() const { return lastPath_; }
+  void setLastPath(const char* absPath);  // no-op if unchanged
+
   static constexpr size_t kCount = 5;
   size_t cursor() const { return cursor_; }
   void moveCursor(int delta);
@@ -55,4 +59,5 @@ class Settings {
   bool autoNext_ = true;
   size_t themeIndex_ = 0;
   size_t cursor_ = 0;
+  char lastPath_[cfg::kMaxPathLen]{};
 };
