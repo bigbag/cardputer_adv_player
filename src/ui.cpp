@@ -68,7 +68,7 @@ bool Ui::browseChanged(const BrowseSnapshot& b) const {
 bool Ui::playerChromeChanged(const PlayerSnapshot& p) const {
   if (!hasLastPlayer_) return true;
   if (p.state != lastPlayer_.state) return true;
-  if (p.volumePercent != lastPlayer_.volumePercent) return true;
+  if (p.volumePercent != lastPlayer_.volumePercent || p.hpMode != lastPlayer_.hpMode) return true;
   if (std::strcmp(p.fileName, lastPlayer_.fileName) != 0) return true;
   return false;
 }
@@ -83,7 +83,8 @@ bool Ui::playerChanged(const PlayerSnapshot& p) const {
 bool Ui::settingsChanged(const Settings& s) const {
   if (!hasLastSettings_) return true;
   SettingsSnapshot cur = s.snapshot();
-  return cur.volumePercent != lastSettings_.volumePercent ||
+  return cur.speakerVolume != lastSettings_.speakerVolume ||
+         cur.hpVolume != lastSettings_.hpVolume ||
          cur.brightness != lastSettings_.brightness ||
          cur.displayTimeoutMs != lastSettings_.displayTimeoutMs ||
          cur.autoNext != lastSettings_.autoNext ||
@@ -376,9 +377,9 @@ void Ui::drawPlaying(const PlayerSnapshot& p, bool full) {
   drawPlayingProgress(p);
 
   if (full || p.volumePercent != lastPlayer_.volumePercent) {
-    d.fillRect(0, 74, 80, 12, theme_.bg);
-    char volBuf[12];
-    snprintf(volBuf, sizeof(volBuf), "Vol %d%%", p.volumePercent);
+    d.fillRect(0, 74, 110, 12, theme_.bg);
+    char volBuf[16];
+    snprintf(volBuf, sizeof(volBuf), "Vol %s%d%%", p.hpMode ? "HP " : "", p.volumePercent);
     d.drawString(volBuf, 4, 74);
   }
 

@@ -8,8 +8,17 @@ class AudioOut {
   bool begin();
   void end();
   bool setSampleRate(uint32_t hz);
+
+  // Volume for the currently active route (speaker or HP).
   void setVolumePercent(int percent);
   int volumePercent() const;
+
+  // Per-route volumes (persisted by Settings/App).
+  void setSpeakerVolume(int percent);
+  void setHpVolume(int percent);
+  int speakerVolume() const { return speakerVol_; }
+  int hpVolume() const { return hpVol_; }
+
   size_t write(const int16_t* stereoFrames, size_t frames);
   void updateAmpFromHp();
   bool headphonesInserted() const;
@@ -21,14 +30,14 @@ class AudioOut {
   bool i2sStart(uint32_t rate);
   void i2sStop();
   void applyVolume();
-  // 0..100 UI → 0..100 effective after HP curve
   int effectiveVolumePercent() const;
-  // ES8311 DAC reg 0x32 value for 0..100 percent
   static uint8_t esDacRegFromPercent(int percent);
+  int activeVolume() const { return hpInserted_ ? hpVol_ : speakerVol_; }
 
   uint32_t rate_ = 0;
-  int volume_ = 70;
+  int speakerVol_ = 70;
+  int hpVol_ = 40;
   bool ready_ = false;
   bool hpInserted_ = false;
-  int softScale_ = 100;  // residual software scale 0..100 after DAC set
+  int softScale_ = 100;  // 0..100 amplitude after curve
 };

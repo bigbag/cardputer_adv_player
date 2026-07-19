@@ -9,7 +9,8 @@ bool Player::begin(AudioOut* out, SdBrowser* browser) {
   out_ = out;
   browser_ = browser;
   state_ = PlayState::Idle;
-  volume_ = cfg::kDefaultVolumePercent;
+  speakerVol_ = cfg::kDefaultSpeakerVolumePercent;
+  hpVol_ = cfg::kDefaultHpVolumePercent;
   return true;
 }
 
@@ -119,7 +120,8 @@ void Player::audioTaskMain() {
   }
 
   out_->setSampleRate(fmt.sampleRate);
-  out_->setVolumePercent(volume_);
+  out_->setSpeakerVolume(speakerVol_);
+  out_->setHpVolume(hpVol_);
   state_ = PlayState::Playing;
 
   constexpr size_t kBufFrames = 512;
@@ -193,15 +195,39 @@ void Player::seekRelative(int) {}
 
 #endif
 
-void Player::setVolumePercent(int p) {
+void Player::setSpeakerVolume(int p) {
   if (p < 0) p = 0;
   if (p > 100) p = 100;
-  volume_ = p;
-  if (out_) out_->setVolumePercent(volume_);
+  speakerVol_ = p;
+  if (out_) out_->setSpeakerVolume(p);
+}
+
+void Player::setHpVolume(int p) {
+  if (p < 0) p = 0;
+  if (p > 100) p = 100;
+  hpVol_ = p;
+  if (out_) out_->setHpVolume(p);
+}
+
+void Player::adjustSpeakerVolume(int delta) { setSpeakerVolume(speakerVol_ + delta); }
+void Player::adjustHpVolume(int delta) { setHpVolume(hpVol_ + delta); }
+int Player::speakerVolume() const { return speakerVol_; }
+int Player::hpVolume() const { return hpVol_; }
+
+void Player::setVolumePercent(int p) {
+  if (out_ && out_->headphonesInserted()) {
+    setHpVolume(p);
+  } else {
+    setSpeakerVolume(p);
+  }
 }
 
 void Player::adjustVolume(int deltaPercent) {
-  setVolumePercent(volume_ + deltaPercent);
+  if (out_ && out_->headphonesInserted()) {
+    adjustHpVolume(deltaPercent);
+  } else {
+    adjustSpeakerVolume(deltaPercent);
+  }
 }
 
 void Player::service() {
@@ -229,7 +255,8 @@ PlayerSnapshot Player::snapshot() const {
   s.state = state_;
   std::strncpy(s.fileName, currentName_, cfg::kMaxNameLen - 1);
   s.fileName[cfg::kMaxNameLen - 1] = '\0';
-  s.volumePercent = volume_;
+  s.volumePercent = (out_ && out_->headphonesInserted()) ? hpVol_ : speakerVol_;
+  s.hpMode = out_ && out_->headphonesInserted();
   if (decoder_) {
     s.positionMs = decoder_->positionMs();
     AudioFormat fmt = decoder_->format();

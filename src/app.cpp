@@ -12,9 +12,9 @@ void App::begin() {
   M5Cardputer.Display.setFont(&fonts::Font0);
 
   settings_.load();
-  Serial.printf("[app] board=%d vol=%d bright=%u timeout=%lu autonext=%d\n",
-                static_cast<int>(M5.getBoard()), settings_.volumePercent(),
-                settings_.brightness(),
+  Serial.printf("[app] board=%d spk=%d hp=%d bright=%u timeout=%lu autonext=%d\n",
+                static_cast<int>(M5.getBoard()), settings_.speakerVolume(),
+                settings_.hpVolume(), settings_.brightness(),
                 static_cast<unsigned long>(settings_.displayTimeoutMs()),
                 settings_.autoNext() ? 1 : 0);
 
@@ -28,15 +28,17 @@ void App::begin() {
   input_.begin();
 
   applySettings();
-  // Ensure volume from NVS is pushed after codec init.
-  player_.setVolumePercent(settings_.volumePercent());
+  // Ensure volumes from NVS are pushed after codec init.
+  player_.setSpeakerVolume(settings_.speakerVolume());
+  player_.setHpVolume(settings_.hpVolume());
 
   lastActivityMs_ = millis();
   ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, lastActivityMs_, true);
 }
 
 void App::applySettings() {
-  player_.setVolumePercent(settings_.volumePercent());
+  player_.setSpeakerVolume(settings_.speakerVolume());
+  player_.setHpVolume(settings_.hpVolume());
   player_.setAutoNext(settings_.autoNext());
   ui_.setBrightness(settings_.brightness());
   if (ui_.displayOn()) {
@@ -168,14 +170,18 @@ void App::handlePlaying(Action a) {
     case Action::Space:
       player_.togglePause();
       break;
-    case Action::VolUp:
+    case Action::VolUp: {
       player_.adjustVolume(cfg::kVolumeStepPercent);
-      settings_.setVolumePercent(player_.snapshot().volumePercent);
+      if (player_.snapshot().hpMode) settings_.setHpVolume(player_.hpVolume());
+      else settings_.setSpeakerVolume(player_.speakerVolume());
       break;
-    case Action::VolDown:
+    }
+    case Action::VolDown: {
       player_.adjustVolume(-cfg::kVolumeStepPercent);
-      settings_.setVolumePercent(player_.snapshot().volumePercent);
+      if (player_.snapshot().hpMode) settings_.setHpVolume(player_.hpVolume());
+      else settings_.setSpeakerVolume(player_.speakerVolume());
       break;
+    }
     case Action::SeekFwd:
       player_.seekRelative(cfg::kSeekStepSeconds);
       break;
@@ -205,18 +211,22 @@ void App::handleSettings(Action a) {
           settings_.cycleTheme(+1);
           break;
         case 1:
-          settings_.setVolumePercent(settings_.volumePercent() + cfg::kVolumeStepPercent);
-          player_.setVolumePercent(settings_.volumePercent());
+          settings_.adjustSpeakerVolume(+cfg::kVolumeStepPercent);
+          player_.setSpeakerVolume(settings_.speakerVolume());
           break;
         case 2:
+          settings_.adjustHpVolume(+cfg::kVolumeStepPercent);
+          player_.setHpVolume(settings_.hpVolume());
+          break;
+        case 3:
           settings_.adjustBrightness(+15);
           ui_.setBrightness(settings_.brightness());
           M5Cardputer.Display.setBrightness(settings_.brightness());
           break;
-        case 3:
+        case 4:
           settings_.cycleDisplayTimeout();
           break;
-        case 4:
+        case 5:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
           break;
@@ -231,21 +241,25 @@ void App::handleSettings(Action a) {
           settings_.cycleTheme(-1);
           break;
         case 1:
-          settings_.setVolumePercent(settings_.volumePercent() - cfg::kVolumeStepPercent);
-          player_.setVolumePercent(settings_.volumePercent());
+          settings_.adjustSpeakerVolume(-cfg::kVolumeStepPercent);
+          player_.setSpeakerVolume(settings_.speakerVolume());
           break;
         case 2:
+          settings_.adjustHpVolume(-cfg::kVolumeStepPercent);
+          player_.setHpVolume(settings_.hpVolume());
+          break;
+        case 3:
           settings_.adjustBrightness(-15);
           ui_.setBrightness(settings_.brightness());
           M5Cardputer.Display.setBrightness(settings_.brightness());
           break;
-        case 3:
+        case 4:
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
           break;
-        case 4:
+        case 5:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
           break;
@@ -259,10 +273,10 @@ void App::handleSettings(Action a) {
         case 0:
           settings_.cycleTheme(+1);
           break;
-        case 3:
+        case 4:
           settings_.cycleDisplayTimeout();
           break;
-        case 4:
+        case 5:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
           break;

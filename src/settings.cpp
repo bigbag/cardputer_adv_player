@@ -10,7 +10,8 @@ static constexpr const char* kNs = "mp3player";
 #endif
 
 void Settings::load() {
-  volumePercent_ = cfg::kDefaultVolumePercent;
+  speakerVol_ = cfg::kDefaultSpeakerVolumePercent;
+  hpVol_ = cfg::kDefaultHpVolumePercent;
   brightness_ = cfg::kDisplayBrightness;
   displayTimeoutMs_ = cfg::kDisplayTimeoutMs;
   autoNext_ = true;
@@ -21,18 +22,18 @@ void Settings::load() {
   if (!prefs.begin(kNs, true)) {
     return;
   }
-  volumePercent_ = prefs.getInt("vol", volumePercent_);
+  speakerVol_ = prefs.getInt("volSpk", speakerVol_);
+  hpVol_ = prefs.getInt("volHp", hpVol_);
   brightness_ = prefs.getUChar("bright", brightness_);
   displayTimeoutMs_ = prefs.getUInt("timeout", displayTimeoutMs_);
   autoNext_ = prefs.getBool("autonext", autoNext_);
   themeIndex_ = static_cast<size_t>(prefs.getUChar("theme", 0));
   prefs.end();
 
-  if (volumePercent_ < 0) volumePercent_ = 0;
-  if (volumePercent_ > 100) volumePercent_ = 100;
-  // Clamp absurd NVS values from earlier gain experiments.
-  if (volumePercent_ < 0) volumePercent_ = 0;
-  if (volumePercent_ > 100) volumePercent_ = 100;
+  if (speakerVol_ < 0) speakerVol_ = 0;
+  if (speakerVol_ > 100) speakerVol_ = 100;
+  if (hpVol_ < 0) hpVol_ = 0;
+  if (hpVol_ > 100) hpVol_ = 100;
   if (themeIndex_ >= themes::kCount) themeIndex_ = 0;
 #endif
 }
@@ -40,7 +41,8 @@ void Settings::load() {
 void Settings::save() const {
 #ifndef UNIT_TEST
   if (!prefs.begin(kNs, false)) return;
-  prefs.putInt("vol", volumePercent_);
+  prefs.putInt("volSpk", speakerVol_);
+  prefs.putInt("volHp", hpVol_);
   prefs.putUChar("bright", brightness_);
   prefs.putUInt("timeout", displayTimeoutMs_);
   prefs.putBool("autonext", autoNext_);
@@ -51,7 +53,8 @@ void Settings::save() const {
 
 SettingsSnapshot Settings::snapshot() const {
   SettingsSnapshot s{};
-  s.volumePercent = volumePercent_;
+  s.speakerVolume = speakerVol_;
+  s.hpVolume = hpVol_;
   s.brightness = brightness_;
   s.displayTimeoutMs = displayTimeoutMs_;
   s.autoNext = autoNext_;
@@ -60,11 +63,20 @@ SettingsSnapshot Settings::snapshot() const {
   return s;
 }
 
-void Settings::setVolumePercent(int v) {
+void Settings::setSpeakerVolume(int v) {
   if (v < 0) v = 0;
   if (v > 100) v = 100;
-  volumePercent_ = v;
+  speakerVol_ = v;
 }
+
+void Settings::setHpVolume(int v) {
+  if (v < 0) v = 0;
+  if (v > 100) v = 100;
+  hpVol_ = v;
+}
+
+void Settings::adjustSpeakerVolume(int delta) { setSpeakerVolume(speakerVol_ + delta); }
+void Settings::adjustHpVolume(int delta) { setHpVolume(hpVol_ + delta); }
 
 void Settings::setBrightness(uint8_t b) { brightness_ = b; }
 
@@ -114,10 +126,11 @@ void Settings::moveCursor(int delta) {
 const char* Settings::label(size_t index) const {
   switch (index) {
     case 0: return "Theme";
-    case 1: return "Volume";
-    case 2: return "Brightness";
-    case 3: return "Scr timeout";
-    case 4: return "Auto-next";
+    case 1: return "Vol spk";
+    case 2: return "Vol HP";
+    case 3: return "Brightness";
+    case 4: return "Scr timeout";
+    case 5: return "Auto-next";
     default: return "?";
   }
 }
@@ -129,20 +142,23 @@ void Settings::formatValue(size_t index, char* buf, size_t cap) const {
       snprintf(buf, cap, "%s", themes::name(themeIndex_));
       break;
     case 1:
-      snprintf(buf, cap, "%d%%", volumePercent_);
+      snprintf(buf, cap, "%d%%", speakerVol_);
       break;
     case 2:
+      snprintf(buf, cap, "%d%%", hpVol_);
+      break;
+    case 3:
       snprintf(buf, cap, "%d%%",
                static_cast<int>((static_cast<int>(brightness_) * 100 + 127) / 255));
       break;
-    case 3:
+    case 4:
       if (displayTimeoutMs_ == 0) {
         snprintf(buf, cap, "never");
       } else {
         snprintf(buf, cap, "%lus", static_cast<unsigned long>(displayTimeoutMs_ / 1000));
       }
       break;
-    case 4:
+    case 5:
       snprintf(buf, cap, "%s", autoNext_ ? "ON" : "OFF");
       break;
     default:

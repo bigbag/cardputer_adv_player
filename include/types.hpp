@@ -28,6 +28,7 @@ struct PlayerSnapshot {
   uint32_t durationMs;
   int volumePercent;
   uint32_t sampleRate;
+  bool hpMode;
 };
 
 struct Toast {
@@ -36,7 +37,8 @@ struct Toast {
 };
 
 struct SettingsSnapshot {
-  int volumePercent;
+  int speakerVolume;
+  int hpVolume;
   uint8_t brightness;
   uint32_t displayTimeoutMs;  // 0 = never
   bool autoNext;

@@ -8,17 +8,16 @@
 
 static constexpr i2s_port_t kI2sPort = I2S_NUM_0;
 
-// Exact bulk write from M5Unified::_speaker_enabled_cb_cardputer_adv
-// DAC volume 0xBF = ±0 dB (not boosted).
+// M5Unified::_speaker_enabled_cb_cardputer_adv bulk write.
 static const uint8_t kEs8311InitSeq[][2] = {
     {0x00, 0x80},  // RESET / CSM POWER ON
     {0x01, 0xB5},  // CLOCK_MANAGER / MCLK=BCLK
     {0x02, 0x18},  // CLOCK_MANAGER / MULT_PRE=3
-    {0x0D, 0x01},  // SYSTEM / Power up analog
+    {0x0D, 0x01},  // SYSTEM / power up analog
     {0x12, 0x00},  // SYSTEM / power-up DAC
-    {0x13, 0x10},  // SYSTEM / Enable HP drive
+    {0x13, 0x10},  // SYSTEM / enable HP drive
     {0x32, 0xBF},  // DAC volume ±0 dB
-    {0x37, 0x08},  // DAC equalizer bypass
+    {0x37, 0x08},  // DAC EQ bypass
 };
 
 bool AudioOut::esWrite(uint8_t reg, uint8_t val) {
@@ -37,45 +36,31 @@ bool AudioOut::esInitRegisters() {
   return true;
 }
 
-// M5Unified Speaker uses master_volume^2 for amplitude (0..255).
-// We mirror that with UI 0..100 → soft scale 0..100 via square curve.
-// DAC stays near 0 dB; loudness is mostly digital (like M5 setVolume).
+// DAC volume stays high; fine loudness is soft (M5 style).
 uint8_t AudioOut::esDacRegFromPercent(int percent) {
   if (percent <= 0) return 0x00;
   if (percent > 100) percent = 100;
-  // Keep DAC high (0xA0..0xBF). Fine control is softScale (M5-style).
-  // At UI 100 → 0xBF (0 dB). At low UI still fairly open so softScale dominates.
   const int reg = 0xA0 + ((0xBF - 0xA0) * percent) / 100;
   return static_cast<uint8_t>(reg);
 }
 
+// M5-style: amplitude ∝ volume².
+// Speaker needs higher UI to be loud; HP is more sensitive.
 int AudioOut::effectiveVolumePercent() const {
-  int v = volume_;
-  if (v < 0) v = 0;
-  if (v > 100) v = 100;
-  if (v == 0) return 0;
-  // Square curve like M5: volume ∝ master^2
-  // UI 50 → 25%, UI 70 → 49%, UI 100 → 100%
-  const int sq = (v * v) / 100;
+  const int v = activeVolume();
+  if (v <= 0) return 0;
+  const int sq = (v * v) / 100;  // 0..100
   return sq < 1 ? 1 : sq;
 }
 
 void AudioOut::applyVolume() {
-  const int eff = effectiveVolumePercent();  // already squared 0..100
-  const uint8_t dac = esDacRegFromPercent(volume_);  // DAC tracks UI, not squared
+  const int eff = effectiveVolumePercent();
+  const uint8_t dac = esDacRegFromPercent(activeVolume());
   esWrite(0x32, dac);
+  softScale_ = eff;
 
-  // softScale_ = amplitude percent after square curve.
-  // HP: a bit quieter (jack is more sensitive than the tiny speaker).
-  if (hpInserted_) {
-    softScale_ = (eff * 55) / 100;  // ~-5 dB vs speaker
-    if (volume_ > 0 && softScale_ < 1) softScale_ = 1;
-  } else {
-    softScale_ = eff;
-  }
-
-  Serial.printf("[audio] vol ui=%d%% soft=%d%% dac=0x%02X hp=%d ampEn=%d\n",
-                volume_, softScale_, dac, hpInserted_ ? 1 : 0,
+  Serial.printf("[audio] %s vol=%d%% soft=%d%% dac=0x%02X ampEn=%d\n",
+                hpInserted_ ? "hp" : "spk", activeVolume(), softScale_, dac,
                 digitalRead(cfg::kAmpEnablePin));
 }
 
@@ -144,10 +129,11 @@ bool AudioOut::begin() {
     digitalWrite(cfg::kAmpEnablePin, HIGH);
   }
 
-  volume_ = cfg::kDefaultVolumePercent;
+  speakerVol_ = cfg::kDefaultSpeakerVolumePercent;
+  hpVol_ = cfg::kDefaultHpVolumePercent;
   applyVolume();
   ready_ = true;
-  Serial.printf("[audio] ready ampEn=%d (M5 curve: vol^2 soft, DAC~0dB)\n",
+  Serial.printf("[audio] ready spk=%d%% hp=%d%% ampEn=%d\n", speakerVol_, hpVol_,
                 digitalRead(cfg::kAmpEnablePin));
   return true;
 }
@@ -169,14 +155,29 @@ bool AudioOut::setSampleRate(uint32_t hz) {
   return true;
 }
 
-void AudioOut::setVolumePercent(int percent) {
+void AudioOut::setSpeakerVolume(int percent) {
   if (percent < 0) percent = 0;
   if (percent > 100) percent = 100;
-  volume_ = percent;
-  if (ready_) applyVolume();
+  speakerVol_ = percent;
+  if (ready_ && !hpInserted_) applyVolume();
 }
 
-int AudioOut::volumePercent() const { return volume_; }
+void AudioOut::setHpVolume(int percent) {
+  if (percent < 0) percent = 0;
+  if (percent > 100) percent = 100;
+  hpVol_ = percent;
+  if (ready_ && hpInserted_) applyVolume();
+}
+
+void AudioOut::setVolumePercent(int percent) {
+  if (hpInserted_) {
+    setHpVolume(percent);
+  } else {
+    setSpeakerVolume(percent);
+  }
+}
+
+int AudioOut::volumePercent() const { return activeVolume(); }
 
 size_t AudioOut::write(const int16_t* stereoFrames, size_t frames) {
   if (!ready_ || frames == 0) return 0;
@@ -184,7 +185,7 @@ size_t AudioOut::write(const int16_t* stereoFrames, size_t frames) {
   constexpr size_t kChunkFrames = 128;
   int16_t buf[kChunkFrames * 2];
   size_t written = 0;
-  const int scale = softScale_;  // 0..100 amplitude %
+  const int scale = softScale_;
 
   while (written < frames) {
     size_t n = frames - written;
@@ -214,7 +215,6 @@ void AudioOut::updateAmpFromHp() {
   const int hpRaw = digitalRead(cfg::kHpDetectPin);
   const bool hp = (hpRaw == LOW);
 
-  // NS4150B amp enable: HIGH = speaker. Hardware also mutes amp on jack insert.
   digitalWrite(cfg::kAmpEnablePin, hp ? LOW : HIGH);
 
   if (hp != hpInserted_) {

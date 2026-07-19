@@ -12,8 +12,12 @@ class Settings {
 
   SettingsSnapshot snapshot() const;
 
-  int volumePercent() const { return volumePercent_; }
-  void setVolumePercent(int v);
+  int speakerVolume() const { return speakerVol_; }
+  int hpVolume() const { return hpVol_; }
+  void setSpeakerVolume(int v);
+  void setHpVolume(int v);
+  void adjustSpeakerVolume(int delta);
+  void adjustHpVolume(int delta);
 
   uint8_t brightness() const { return brightness_; }
   void setBrightness(uint8_t b);
@@ -31,8 +35,8 @@ class Settings {
   void cycleTheme(int delta);
   const Theme& theme() const { return themes::get(themeIndex_); }
 
-  // Setting rows: Theme, Volume, Brightness, Scr timeout, Auto-next
-  static constexpr size_t kCount = 5;
+  // Rows: Theme, Vol spk, Vol HP, Brightness, Scr timeout, Auto-next
+  static constexpr size_t kCount = 6;
   size_t cursor() const { return cursor_; }
   void moveCursor(int delta);
 
@@ -40,7 +44,8 @@ class Settings {
   const char* label(size_t index) const;
 
  private:
-  int volumePercent_ = 40;
+  int speakerVol_ = 70;
+  int hpVol_ = 40;
   uint8_t brightness_ = 128;
   uint32_t displayTimeoutMs_ = 10000;
   bool autoNext_ = true;

@@ -20,8 +20,14 @@ class Player {
   bool open(const char* absPath);
   void stop();
   void togglePause();
-  void setVolumePercent(int p);
-  void adjustVolume(int deltaPercent);
+  void setSpeakerVolume(int p);
+  void setHpVolume(int p);
+  void adjustSpeakerVolume(int delta);
+  void adjustHpVolume(int delta);
+  int speakerVolume() const;
+  int hpVolume() const;
+  void setVolumePercent(int p);  // current route (kept for compat)
+  void adjustVolume(int deltaPercent);  // current route
   void seekRelative(int deltaSeconds);
   void service();
   void setAutoNext(bool on) { autoNextEnabled_ = on; }
@@ -62,6 +68,7 @@ class Player {
   char currentPath_[cfg::kMaxPathLen]{};
   char currentName_[cfg::kMaxNameLen]{};
   char lastError_[48]{};
-  int volume_ = cfg::kDefaultVolumePercent;
+  int speakerVol_ = cfg::kDefaultSpeakerVolumePercent;
+  int hpVol_ = cfg::kDefaultHpVolumePercent;
   bool autoNextEnabled_ = true;
 };
