@@ -2,45 +2,55 @@
 
 Minimal MP3/WAV player for **M5Stack Cardputer-ADV** (ESP32-S3 / Stamp-S3A).
 
-Browse a FAT32 microSD card, play MP3 and 16-bit PCM WAV through the ES8311 codec (speaker or 3.5 mm jack), terminal-green UI on the 240×135 display.
+Browse a FAT32 microSD card, play MP3 and 16-bit PCM WAV through the ES8311 codec
+(speaker or 3.5 mm jack), terminal-green UI on the 240×135 display.
 
 ## Requirements
 
 - Cardputer-ADV hardware
-- PlatformIO Core 6.x
-- Python **3.10–3.13** for `pio` (if system Python is 3.14+, use e.g. `python3.12 -m platformio …`)
+- [PlatformIO Core](https://platformio.org/) 6.x
+- Python **3.10–3.13** for PlatformIO (3.14+ is not supported — the Makefile auto-picks
+  `python3.12 -m platformio` when needed)
 - FAT32 microSD with `.mp3` / `.wav` files
 
-## Build / flash / monitor
+## Quick start
 
 ```bash
-# Build
-python3.12 -m platformio run -e cardputer-adv
-# or: pio run -e cardputer-adv   # when default Python is 3.10–3.13
+make build          # compile firmware
+make flash          # build + upload
+make monitor        # serial log @ 115200
+make test           # host unit tests
+make help           # all targets
+```
 
-# Upload (device in download mode if needed — see below)
-python3.12 -m platformio run -e cardputer-adv -t upload
+Override the PlatformIO launcher if needed:
 
-# Serial log
-python3.12 -m platformio device monitor -b 115200
+```bash
+make build PIO="python3.12 -m platformio"
+make flash PIO="python3.12 -m platformio"
+```
+
+Equivalent raw PlatformIO:
+
+```bash
+pio run -e cardputer-adv
+pio run -e cardputer-adv -t upload
+pio device monitor -b 115200
+pio test -e native
 ```
 
 ### Download mode (Cardputer-ADV)
 
+If the port does not appear or upload fails:
+
 1. Power switch **OFF**
 2. Hold **G0**, power **ON**, release G0
-3. Upload firmware
+3. `make flash`
 4. Power-cycle normally
 
 ### Charging
 
 Leave the side power switch **ON** while charging.
-
-## Host unit tests
-
-```bash
-python3.12 -m platformio test -e native
-```
 
 ## Suggested SD layout
 
@@ -84,7 +94,8 @@ Hint bar: `;/ move  Ent open  Esc up`
 
 Hint bar: `Spc pause  [] seek  ,. vol  Esc list`
 
-Starting another file from Browse replaces the current track. When a track ends, the next audio file in the **same folder** auto-plays; if none remain, status shows `DONE`.
+Starting another file from Browse replaces the current track. When a track ends, the
+next audio file in the **same folder** auto-plays; if none remain, status shows `DONE`.
 
 ## Audio notes
 
@@ -105,7 +116,20 @@ Starting another file from Browse replaces the current track. When a track ends,
 9. Headphone jack mutes speaker amp  
 10. Serial 115200 shows mount/open/errors  
 
-**Hardware validation status:** code builds and host tests pass; full on-device checklist not yet signed off in this environment.
+**Hardware validation status:** host tests and firmware build pass; full on-device
+checklist not yet signed off in this environment.
+
+## Project layout
+
+```text
+include/          config, actions, types, path_utils
+src/              app, ui, input, player, sd_browser, audio_out, decoders/
+lib/minimp3/      vendored minimp3.h
+test/             native Unity tests
+docs/superpowers/ design spec + implementation plan
+Makefile          build / flash / test wrappers
+platformio.ini    cardputer-adv + native envs
+```
 
 ## Architecture (short)
 
