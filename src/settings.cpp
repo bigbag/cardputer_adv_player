@@ -30,8 +30,8 @@ void Settings::load() {
 
   if (volumePercent_ < 0) volumePercent_ = 0;
   if (volumePercent_ > 100) volumePercent_ = 100;
-  // Guard against a saved mute / broken quiet curve from older builds.
-  if (volumePercent_ > 0 && volumePercent_ < 10) volumePercent_ = 40;
+  // Lift volumes saved under the old too-quiet curve.
+  if (volumePercent_ > 0 && volumePercent_ < 25) volumePercent_ = 75;
   if (themeIndex_ >= themes::kCount) themeIndex_ = 0;
 #endif
 }

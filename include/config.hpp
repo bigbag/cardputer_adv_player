@@ -47,7 +47,7 @@ constexpr size_t kMaxNameLen = 64;
 constexpr int kVolumeStepPercent = 5;
 constexpr int kSeekStepSeconds = 5;
 // UI default volume (also used if NVS missing).
-constexpr int kDefaultVolumePercent = 60;
+constexpr int kDefaultVolumePercent = 75;
 constexpr uint32_t kToastMs = 1500;
 
 // Audio task / buffers

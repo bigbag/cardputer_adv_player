@@ -8,8 +8,8 @@
 
 static constexpr i2s_port_t kI2sPort = I2S_NUM_0;
 
-// ES8311 bring-up. DAC volume (0x32) set in applyVolume().
-// Sequence from working Cardputer-Adv players + leave room for vol reg.
+// Official M5Unified Cardputer-ADV speaker enable (M5Unified.cpp).
+// 0x32=0xBF is 0 dB; docs note 0xDF ≈ +6 dB.
 static const uint8_t kEs8311InitSeq[][2] = {
     {0x00, 0x80},
     {0x01, 0xB5},
@@ -17,8 +17,14 @@ static const uint8_t kEs8311InitSeq[][2] = {
     {0x0D, 0x01},
     {0x12, 0x00},
     {0x13, 0x10},
+    {0x32, 0xBF},
     {0x37, 0x08},
 };
+
+// M5.Speaker uses an internal "magnification" (default 16) on PCM.
+// Our path must apply similar digital gain or the 1W speaker stays whisper-quiet.
+static constexpr int kSpeakerGainX = 12;  // ×12 at UI 100%
+static constexpr int kHpGainX = 3;        // jack needs far less
 
 bool AudioOut::esWrite(uint8_t reg, uint8_t val) {
   return M5.In_I2C.writeRegister(cfg::kEs8311Addr, reg, &val, 1,
@@ -36,15 +42,12 @@ bool AudioOut::esInitRegisters() {
   return true;
 }
 
-// UI 0..100 → ES8311 DAC dig vol. 0xBF ≈ 0 dB; ~0.5 dB/step (ADF-style).
+// UI 0..100 → ES8311 DAC. Range 0x00 mute … 0xBF = 0 dB … 0xDF ≈ +6 dB.
 uint8_t AudioOut::esDacRegFromPercent(int percent) {
   if (percent <= 0) return 0x00;
   if (percent > 100) percent = 100;
-  // Keep a usable floor so low UI settings still produce sound.
-  if (percent < 5) percent = 5;
-  int reg = 0xBF - 2 * (100 - percent);
-  if (reg < 0x18) reg = 0x18;  // never park at near-mute unless UI is 0
-  if (reg > 0xBF) reg = 0xBF;
+  // 1..100 → 0x60..0xDF (room to boost above 0 dB at the top end)
+  const int reg = 0x60 + ((0xDF - 0x60) * percent) / 100;
   return static_cast<uint8_t>(reg);
 }
 
@@ -52,16 +55,7 @@ int AudioOut::effectiveVolumePercent() const {
   int v = volume_;
   if (v < 0) v = 0;
   if (v > 100) v = 100;
-  if (v == 0) return 0;
-
-  // Mild ease-in (not squared-to-nothing). Speaker and HP share DAC mapping;
-  // HP gets extra softScale pad only.
-  const float t = v / 100.0f;
-  const float shaped = 0.55f * t + 0.45f * (t * t);
-  int eff = static_cast<int>(shaped * 100.0f + 0.5f);
-  if (eff < 8) eff = 8;  // audible floor when UI > 0
-  if (eff > 100) eff = 100;
-  return eff;
+  return v;
 }
 
 void AudioOut::applyVolume() {
@@ -69,17 +63,15 @@ void AudioOut::applyVolume() {
   const uint8_t dac = esDacRegFromPercent(eff);
   esWrite(0x32, dac);
 
-  // Software pad: only for true headphone path (not as primary attenuator).
-  // Previous 45%*square*70 soft made HP essentially silent at normal UI levels.
-  if (hpInserted_) {
-    softScale_ = 55;  // ~ -5 dB digital pad on jack
-  } else {
-    softScale_ = 100;
-  }
+  // softScale_ is used as "percent of gainX" in write():
+  //   sample * (gainX * softScale_) / 100
+  // Speaker needs high gain; HP stays moderate.
+  softScale_ = eff;  // 0..100
 
-  Serial.printf("[audio] vol ui=%d%% eff=%d%% dac=0x%02X hp=%d amp=%d soft=%d\n",
-                volume_, eff, dac, hpInserted_ ? 1 : 0,
-                digitalRead(cfg::kAmpEnablePin), softScale_);
+  Serial.printf("[audio] vol ui=%d%% dac=0x%02X hp=%d ampEn=%d gainX=%d\n",
+                volume_, dac, hpInserted_ ? 1 : 0,
+                digitalRead(cfg::kAmpEnablePin),
+                hpInserted_ ? kHpGainX : kSpeakerGainX);
 }
 
 bool AudioOut::i2sStart(uint32_t rate) {
@@ -89,9 +81,10 @@ bool AudioOut::i2sStart(uint32_t rate) {
   i2sCfg.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
   i2sCfg.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
   i2sCfg.communication_format = I2S_COMM_FORMAT_STAND_I2S;
-  i2sCfg.dma_buf_count = 6;
+  i2sCfg.dma_buf_count = 8;
   i2sCfg.dma_buf_len = 256;
   i2sCfg.tx_desc_auto_clear = true;
+  i2sCfg.use_apll = false;
 
   if (i2s_driver_install(kI2sPort, &i2sCfg, 0, nullptr) != ESP_OK) {
     Serial.println("[audio] i2s_driver_install failed");
@@ -125,10 +118,11 @@ void AudioOut::i2sStop() {
 bool AudioOut::begin() {
   pinMode(cfg::kHpDetectPin, INPUT_PULLUP);
   pinMode(cfg::kAmpEnablePin, OUTPUT);
-  // Default speaker path ON until we read HP pin.
   digitalWrite(cfg::kAmpEnablePin, HIGH);
 
+  // Prefer board In_I2C (same bus as keyboard); ensure pins.
   Wire.begin(cfg::kI2cSda, cfg::kI2cScl, 100000);
+  delay(10);
 
   if (!esInitRegisters()) {
     Serial.println("[audio] ES8311 init failed");
@@ -136,18 +130,21 @@ bool AudioOut::begin() {
   }
   if (!i2sStart(cfg::kDefaultSampleRate)) return false;
 
-  // Read HP once; if detect is stuck LOW wrongly, user still gets amp via
-  // force-speaker fallback when volume applied with no jack change.
   const int hpRaw = digitalRead(cfg::kHpDetectPin);
   hpInserted_ = (hpRaw == LOW);
-  Serial.printf("[audio] HP pin G%d raw=%d (%s)\n", cfg::kHpDetectPin, hpRaw,
-                hpInserted_ ? "jack?" : "speaker");
+  Serial.printf("[audio] HP G%d raw=%d → %s\n", cfg::kHpDetectPin, hpRaw,
+                hpInserted_ ? "jack" : "speaker");
 
   updateAmpFromHp();
+  if (!hpInserted_) {
+    digitalWrite(cfg::kAmpEnablePin, HIGH);
+  }
+
   volume_ = cfg::kDefaultVolumePercent;
   applyVolume();
   ready_ = true;
-  Serial.println("[audio] ready");
+  Serial.printf("[audio] ready ampEn=%d (M5-style gain speaker×%d hp×%d)\n",
+                digitalRead(cfg::kAmpEnablePin), kSpeakerGainX, kHpGainX);
   return true;
 }
 
@@ -162,8 +159,9 @@ bool AudioOut::setSampleRate(uint32_t hz) {
   if (hz == rate_) return true;
   i2sStop();
   if (!i2sStart(hz)) return false;
-  // DAC vol is I2C — survives I2S reinstall; re-apply anyway.
   applyVolume();
+  updateAmpFromHp();
+  if (!hpInserted_) digitalWrite(cfg::kAmpEnablePin, HIGH);
   return true;
 }
 
@@ -182,20 +180,26 @@ size_t AudioOut::write(const int16_t* stereoFrames, size_t frames) {
   constexpr size_t kChunkFrames = 128;
   int16_t buf[kChunkFrames * 2];
   size_t written = 0;
-  const int scale = softScale_;
+
+  // gain = gainX * (softScale_/100); softScale_ is UI 0..100
+  const int gainX = hpInserted_ ? kHpGainX : kSpeakerGainX;
+  const int mul = gainX * softScale_;  // e.g. 12 * 75 = 900 → ×9.0
 
   while (written < frames) {
     size_t n = frames - written;
     if (n > kChunkFrames) n = kChunkFrames;
 
     const int16_t* src = stereoFrames + written * 2;
-    if (scale >= 100) {
-      std::memcpy(buf, src, n * 4);
-    } else if (scale <= 0) {
+    if (mul <= 0) {
       std::memset(buf, 0, n * 4);
+    } else if (mul == 100) {
+      std::memcpy(buf, src, n * 4);
     } else {
       for (size_t i = 0; i < n * 2; ++i) {
-        buf[i] = static_cast<int16_t>((static_cast<int32_t>(src[i]) * scale) / 100);
+        int32_t s = (static_cast<int32_t>(src[i]) * mul) / 100;
+        if (s > 32767) s = 32767;
+        if (s < -32768) s = -32768;
+        buf[i] = static_cast<int16_t>(s);
       }
     }
 
@@ -211,11 +215,18 @@ size_t AudioOut::write(const int16_t* stereoFrames, size_t frames) {
 void AudioOut::updateAmpFromHp() {
   const int hpRaw = digitalRead(cfg::kHpDetectPin);
   const bool hp = (hpRaw == LOW);
-  // Amp enable: HIGH = speaker, LOW = mute amp (jack path).
-  digitalWrite(cfg::kAmpEnablePin, hp ? LOW : HIGH);
+
+  if (hp) {
+    digitalWrite(cfg::kAmpEnablePin, LOW);
+  } else {
+    digitalWrite(cfg::kAmpEnablePin, HIGH);
+  }
+
   if (hp != hpInserted_) {
     hpInserted_ = hp;
-    Serial.printf("[audio] headphones %s (raw=%d)\n", hp ? "in" : "out", hpRaw);
+    Serial.printf("[audio] route %s (HP raw=%d ampEn=%d)\n",
+                  hp ? "jack" : "speaker", hpRaw,
+                  digitalRead(cfg::kAmpEnablePin));
     if (ready_) applyVolume();
   } else {
     hpInserted_ = hp;
@@ -229,6 +240,9 @@ bool AudioOut::headphonesInserted() const {
 bool AudioOut::playTestBeep(uint32_t freqHz, uint32_t ms) {
   if (!ready_) return false;
 
+  updateAmpFromHp();
+  if (!hpInserted_) digitalWrite(cfg::kAmpEnablePin, HIGH);
+
   uint32_t totalFrames = rate_ * ms / 1000;
   constexpr size_t kChunk = 128;
   int16_t buf[kChunk * 2];
@@ -240,7 +254,8 @@ bool AudioOut::playTestBeep(uint32_t freqHz, uint32_t ms) {
 
     for (size_t i = 0; i < n; ++i) {
       float t = (float)(pos + i) / (float)rate_;
-      int16_t sample = (int16_t)(8000.0f * sinf(2.0f * M_PI * freqHz * t));
+      // Pre-scale down so write() gain doesn't clip the beep into square wave
+      int16_t sample = (int16_t)(2500.0f * sinf(2.0f * M_PI * freqHz * t));
       buf[i * 2] = sample;
       buf[i * 2 + 1] = sample;
     }
