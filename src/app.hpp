@@ -6,6 +6,7 @@
 #include "ui.hpp"
 #include "input.hpp"
 #include "types.hpp"
+#include <cstdint>
 
 class App {
  public:
@@ -17,6 +18,8 @@ class App {
   void handleBrowse(Action a);
   void handlePlaying(Action a);
   void playSelection();
+  void noteActivity(uint32_t nowMs);
+  void updateDisplayPower(uint32_t nowMs);
 
   AudioOut audio_;
   SdBrowser browser_;
@@ -24,4 +27,5 @@ class App {
   Ui ui_;
   Input input_;
   Screen screen_ = Screen::Browse;
+  uint32_t lastActivityMs_ = 0;
 };

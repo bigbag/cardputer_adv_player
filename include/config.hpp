@@ -41,6 +41,9 @@ constexpr uint16_t kColorSelectFg = 0x0000;
 constexpr int kHintBarH = 12;
 constexpr int kListRowH = 14;
 constexpr int kMaxVisibleRows = 7;
+constexpr uint8_t kDisplayBrightness = 128;
+// Dim/off backlight after this many ms with no key activity (audio keeps playing).
+constexpr uint32_t kDisplayTimeoutMs = 10000;
 
 // Browser / player
 constexpr size_t kMaxDirEntries = 256;

@@ -10,6 +10,7 @@ void App::begin() {
   M5Cardputer.begin(cfg, true);
   M5Cardputer.Display.setRotation(1);
   M5Cardputer.Display.setFont(&fonts::Font0);
+  M5Cardputer.Display.setBrightness(cfg::kDisplayBrightness);
 
   Serial.printf("[app] board=%d\n", static_cast<int>(M5.getBoard()));
 
@@ -20,10 +21,29 @@ void App::begin() {
   ui_.begin();
   input_.begin();
 
-  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), millis(), true);
+  lastActivityMs_ = millis();
+  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), lastActivityMs_, true);
+}
+
+void App::noteActivity(uint32_t nowMs) {
+  lastActivityMs_ = nowMs;
+  if (!ui_.displayOn()) {
+    ui_.setDisplayOn(true);
+    // Immediate full paint after wake.
+    ui_.render(screen_, browser_.snapshot(), player_.snapshot(), nowMs, true);
+  }
+}
+
+void App::updateDisplayPower(uint32_t nowMs) {
+  if (!ui_.displayOn()) return;
+  if ((nowMs - lastActivityMs_) >= cfg::kDisplayTimeoutMs) {
+    Serial.println("[app] display off (timeout)");
+    ui_.setDisplayOn(false);
+  }
 }
 
 void App::loop() {
+  const uint32_t now = millis();
   M5Cardputer.update();
   audio_.updateAmpFromHp();
   player_.service();
@@ -31,23 +51,26 @@ void App::loop() {
   Action a = input_.poll(screen_);
   bool forceUi = false;
   if (a != Action::None) {
+    noteActivity(now);
+    // Any key while screen was off only wakes; still process the key.
     handle(a);
     forceUi = true;
   }
 
   char errBuf[48];
   if (player_.takeError(errBuf, sizeof(errBuf))) {
-    ui_.showToast(errBuf, millis());
+    noteActivity(now);
+    ui_.showToast(errBuf, now);
     if (player_.snapshot().state == PlayState::Error) {
       screen_ = Screen::Browse;
     }
     forceUi = true;
   }
 
-  // Dirty-render only; force after input so navigation feels instant.
-  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), millis(), forceUi);
+  // Progress ticks while playing should not reset idle timeout.
+  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), now, forceUi);
+  updateDisplayPower(now);
 
-  // Light yield — keeps keyboard responsive without starving audio task.
   delay(10);
 }
 
@@ -118,7 +141,6 @@ void App::handlePlaying(Action a) {
     case Action::Back:
       screen_ = Screen::Browse;
       break;
-    // Allow ;/. navigation to jump back to list without stopping? skip.
     default:
       break;
   }

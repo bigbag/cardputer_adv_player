@@ -115,6 +115,12 @@ Hint bar: `Spc pause  [] seek  ,= vol  Bs list`
 Starting another file from Browse replaces the current track. When a track ends, the
 next audio file in the **same folder** auto-plays; if none remain, status shows `DONE`.
 
+## Display
+
+- Backlight turns **off after 10 seconds** with no key presses (audio keeps playing).
+- Any key wakes the screen; the same key is also handled normally.
+- Playing screen updates the time/progress bar without full-screen redraws (less blink).
+
 ## Audio notes
 
 - Formats: MP3 (minimp3), WAV PCM 16-bit mono/stereo
