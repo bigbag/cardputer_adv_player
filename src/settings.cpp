@@ -19,7 +19,7 @@ void Settings::applyDefaults() {
   brightness_ = cfg::kDisplayBrightness;
   displayTimeoutMs_ = cfg::kDisplayTimeoutMs;
   autoNext_ = true;
-  onBoot_ = OnBootMode::Play;
+  onBoot_ = OnBootMode::Browse;
   themeIndex_ = 0;
   cursor_ = 0;
   lastPath_[0] = '\0';

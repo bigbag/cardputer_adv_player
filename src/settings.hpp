@@ -61,7 +61,7 @@ class Settings {
   uint8_t brightness_ = 128;
   uint32_t displayTimeoutMs_ = 10000;
   bool autoNext_ = true;
-  OnBootMode onBoot_ = OnBootMode::Play;
+  OnBootMode onBoot_ = OnBootMode::Browse;
   size_t themeIndex_ = 0;
   size_t cursor_ = 0;
   char lastPath_[cfg::kMaxPathLen]{};

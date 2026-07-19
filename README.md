@@ -132,19 +132,21 @@ Rows (change with `,` / `/`):
 - **Brightness** — dimmer / brighter
 - **Scr timeout** — 5s / 10s / 30s / 60s / never
 - **Auto-next** — ON / OFF
+- **On boot** — play (auto-play last track) / browse (open folder only, default) / off (ignore last path)
 
 Keys:
 
 - **`;` / `.`** — Move row
 - **`,` / `/`** — Decrease / increase
-- **`Enter` / `Space`** — Cycle theme / timeout / auto-next
+- **`Enter` / `Space`** — Cycle theme / timeout / auto-next / on boot
 - **`Backspace` / `S`** — Exit (values already auto-saved on each change)
 
 Jack mutes the speaker in **hardware**. There is **one Volume** with a wide range: use
 **low** levels with headphones, **higher** levels for the built-in speaker.
 
-Settings (including last played path) auto-save to `/.asvmp3/config.cfg` on change.
-After reboot the last track is restored and playback starts if the file still exists.
+Settings (including last played path and on-boot mode) auto-save to `/.asvmp3/config.cfg` on change.
+On boot, behavior follows **On boot**: **play** restores and starts the last track if it still exists;
+**browse** only opens its folder and highlights it; **off** ignores the saved path.
 
 Starting another file from Browse replaces the current track. When a track ends, the
 next audio file in the **same folder** auto-plays; if none remain, status shows `DONE`.
@@ -174,7 +176,7 @@ next audio file in the **same folder** auto-plays; if none remain, status shows 
 8. Backspace to Browse while audio continues; open new file switches track
 9. Headphone jack mutes speaker amp
 10. Settings survive reboot (`/.asvmp3/config.cfg`)
-11. Last track resumes after reboot
+11. Last track on boot follows **On boot** (play / browse / off)
 12. Serial 115200 shows mount/open/errors
 
 **Hardware validation status:** host tests and firmware build pass; full on-device
