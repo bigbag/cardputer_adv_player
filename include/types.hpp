@@ -22,6 +22,11 @@ struct BrowseSnapshot {
   bool sdOk;
 };
 
+struct BrowserLocation {
+  char path[cfg::kMaxPathLen];
+  char item[cfg::kMaxNameLen];  // selected visible entry; empty for no selection
+};
+
 struct PlayerSnapshot {
   PlayState state;
   char fileName[cfg::kMaxNameLen];
