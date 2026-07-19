@@ -11,6 +11,8 @@ void App::begin() {
   M5Cardputer.Display.setRotation(1);
   M5Cardputer.Display.setFont(&fonts::Font0);
 
+  Serial.printf("[app] board=%d\n", static_cast<int>(M5.getBoard()));
+
   audio_.begin();
   browser_.begin();
   browser_.listCurrent();
@@ -18,7 +20,7 @@ void App::begin() {
   ui_.begin();
   input_.begin();
 
-  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), millis());
+  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), millis(), true);
 }
 
 void App::loop() {
@@ -26,8 +28,12 @@ void App::loop() {
   audio_.updateAmpFromHp();
   player_.service();
 
-  Action a = input_.poll();
-  if (a != Action::None) handle(a);
+  Action a = input_.poll(screen_);
+  bool forceUi = false;
+  if (a != Action::None) {
+    handle(a);
+    forceUi = true;
+  }
 
   char errBuf[48];
   if (player_.takeError(errBuf, sizeof(errBuf))) {
@@ -35,9 +41,14 @@ void App::loop() {
     if (player_.snapshot().state == PlayState::Error) {
       screen_ = Screen::Browse;
     }
+    forceUi = true;
   }
 
-  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), millis());
+  // Dirty-render only; force after input so navigation feels instant.
+  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), millis(), forceUi);
+
+  // Light yield — keeps keyboard responsive without starving audio task.
+  delay(10);
 }
 
 void App::handle(Action a) {
@@ -58,22 +69,21 @@ void App::handleBrowse(Action a) {
       break;
     case Action::Enter: {
       if (!browser_.sdOk()) {
+        Serial.println("[app] SD retry");
         browser_.remount();
-        browser_.listCurrent();
         break;
       }
       if (browser_.count() == 0) break;
       const DirEntry& e = browser_.entries()[browser_.cursor()];
       if (e.kind == EntryKind::Dir) {
         browser_.enter(e.name);
-        browser_.listCurrent();
       } else {
         playSelection();
       }
       break;
     }
     case Action::Space: {
-      if (browser_.count() == 0) break;
+      if (!browser_.sdOk() || browser_.count() == 0) break;
       const DirEntry& e = browser_.entries()[browser_.cursor()];
       if (e.kind != EntryKind::Dir) {
         playSelection();
@@ -82,7 +92,6 @@ void App::handleBrowse(Action a) {
     }
     case Action::Back:
       browser_.up();
-      browser_.listCurrent();
       break;
     default:
       break;
@@ -109,6 +118,7 @@ void App::handlePlaying(Action a) {
     case Action::Back:
       screen_ = Screen::Browse;
       break;
+    // Allow ;/. navigation to jump back to list without stopping? skip.
     default:
       break;
   }
@@ -118,6 +128,7 @@ void App::playSelection() {
   char absPath[cfg::kMaxPathLen];
   const DirEntry& e = browser_.entries()[browser_.cursor()];
   if (!path::join(absPath, sizeof(absPath), browser_.path(), e.name)) return;
+  Serial.printf("[app] play %s\n", absPath);
   player_.open(absPath);
   screen_ = Screen::Playing;
 }

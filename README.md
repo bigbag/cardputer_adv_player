@@ -88,26 +88,29 @@ Authoritative map (matches firmware `src/input.cpp`):
 | Key | Action |
 |-----|--------|
 | `;` | Cursor up |
-| `/` | Cursor down |
+| `.` or `/` | Cursor down |
 | `Enter` | Open folder or play file |
 | `Space` | Play highlighted audio file |
-| `Esc` or `` ` `` | Parent directory |
+| `Backspace` or `` ` `` | Parent directory |
 | `Enter` when no SD | Retry mount |
 
-Hint bar: `;/ move  Ent open  Esc up`
+Hint bar: `;/ move  Ent open  Bs back`
+
+> Cardputer has **no Esc key**. Use **Backspace** (or `` ` ``) for Back.
+> **Enter** is a special key (`status.enter`), not the letter key row.
 
 ### Now Playing
 
 | Key | Action |
 |-----|--------|
 | `Space` | Play / pause |
-| `,` | Volume down (~5%) |
-| `.` | Volume up (~5%) |
+| `,` or `-` | Volume down (~5%) |
+| `=` or `+` | Volume up (~5%) |
 | `[` | Seek back ~5 s |
 | `]` | Seek forward ~5 s |
-| `Esc` or `` ` `` | Back to browse (**audio keeps playing**) |
+| `Backspace` or `` ` `` | Back to browse (**audio keeps playing**) |
 
-Hint bar: `Spc pause  [] seek  ,. vol  Esc list`
+Hint bar: `Spc pause  [] seek  ,= vol  Bs list`
 
 Starting another file from Browse replaces the current track. When a track ends, the
 next audio file in the **same folder** auto-plays; if none remain, status shows `DONE`.

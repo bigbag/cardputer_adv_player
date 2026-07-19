@@ -9,6 +9,8 @@ void Ui::begin() {
   d.setRotation(1);
   d.fillScreen(cfg::kColorBg);
   d.setTextSize(1);
+  hasLastBrowse_ = false;
+  hasLastPlayer_ = false;
 }
 
 void Ui::showToast(const char* text, uint32_t nowMs) {
@@ -17,39 +19,115 @@ void Ui::showToast(const char* text, uint32_t nowMs) {
   toast_.expiresAtMs = nowMs + cfg::kToastMs;
 }
 
-void Ui::render(Screen screen,
+bool Ui::browseChanged(const BrowseSnapshot& b) const {
+  if (!hasLastBrowse_) return true;
+  if (b.sdOk != lastSdOk_) return true;
+  if (b.count != lastCount_) return true;
+  if (b.cursor != lastCursor_) return true;
+  if (b.scroll != lastScroll_) return true;
+  if (b.truncated != lastTruncated_) return true;
+  if (std::strcmp(b.path, lastPath_) != 0) return true;
+  if (b.entries) {
+    for (size_t i = 0; i < b.count; ++i) {
+      if (b.entries[i].kind != lastEntries_[i].kind) return true;
+      if (std::strcmp(b.entries[i].name, lastEntries_[i].name) != 0) return true;
+    }
+  }
+  return false;
+}
+
+bool Ui::playerChanged(const PlayerSnapshot& p) const {
+  if (!hasLastPlayer_) return true;
+  if (p.state != lastPlayer_.state) return true;
+  if (p.volumePercent != lastPlayer_.volumePercent) return true;
+  // Throttle time/bar updates to whole seconds to cut redraws.
+  if ((p.positionMs / 1000) != (lastPlayer_.positionMs / 1000)) return true;
+  if ((p.durationMs / 1000) != (lastPlayer_.durationMs / 1000)) return true;
+  if (std::strcmp(p.fileName, lastPlayer_.fileName) != 0) return true;
+  return false;
+}
+
+void Ui::rememberBrowse(const BrowseSnapshot& b) {
+  lastSdOk_ = b.sdOk;
+  lastCount_ = b.count;
+  lastCursor_ = b.cursor;
+  lastScroll_ = b.scroll;
+  lastTruncated_ = b.truncated;
+  std::strncpy(lastPath_, b.path, cfg::kMaxPathLen - 1);
+  lastPath_[cfg::kMaxPathLen - 1] = '\0';
+  if (b.entries) {
+    for (size_t i = 0; i < b.count && i < cfg::kMaxDirEntries; ++i) {
+      lastEntries_[i] = b.entries[i];
+    }
+  }
+  hasLastBrowse_ = true;
+}
+
+void Ui::rememberPlayer(const PlayerSnapshot& p) {
+  lastPlayer_ = p;
+  hasLastPlayer_ = true;
+}
+
+bool Ui::render(Screen screen,
                 const BrowseSnapshot& browse,
                 const PlayerSnapshot& player,
-                uint32_t nowMs) {
+                uint32_t nowMs,
+                bool force) {
+  const bool toastActive = (toast_.expiresAtMs != 0 && nowMs < toast_.expiresAtMs);
+  const bool toastExpired = (lastToastExp_ != 0 && toast_.expiresAtMs == 0);
+  const bool toastChanged =
+      (toast_.expiresAtMs != lastToastExp_) || toastActive || toastExpired;
+
+  bool dirty = force || (screen != lastScreen_) || toastChanged;
+  if (!dirty) {
+    if (screen == Screen::Browse) {
+      dirty = browseChanged(browse);
+    } else {
+      dirty = playerChanged(player);
+    }
+  }
+  if (!dirty) {
+    return false;
+  }
+
   auto& d = M5Cardputer.Display;
 
-  if (screen != last_) {
+  // Full clear only on screen switch or forced redraw — avoids constant blink.
+  if (force || screen != lastScreen_) {
     d.fillScreen(cfg::kColorBg);
-    last_ = screen;
+    hasLastBrowse_ = false;
+    hasLastPlayer_ = false;
   }
+  lastScreen_ = screen;
 
   if (screen == Screen::Browse) {
     drawBrowse(browse);
+    rememberBrowse(browse);
   } else {
     drawPlaying(player);
+    rememberPlayer(player);
   }
 
   drawToastIfAny(nowMs);
+  lastToastExp_ = toast_.expiresAtMs;
+  return true;
 }
 
 void Ui::drawBrowse(const BrowseSnapshot& b) {
   auto& d = M5Cardputer.Display;
 
+  // Clear content area (leave nothing from previous player frame).
+  d.fillRect(0, 0, cfg::kScreenW, cfg::kScreenH - cfg::kHintBarH, cfg::kColorBg);
+
   if (!b.sdOk) {
-    d.fillScreen(cfg::kColorBg);
     d.setTextColor(cfg::kColorFg, cfg::kColorBg);
-    d.drawString("No SD card", cfg::kScreenW / 2 - 30, cfg::kScreenH / 2 - 10);
+    d.drawString("No SD card", 4, cfg::kScreenH / 2 - 10);
+    d.setTextColor(cfg::kColorDim, cfg::kColorBg);
+    d.drawString("FAT32 only (not exFAT)", 4, cfg::kScreenH / 2 + 6);
     drawHint("Ent retry");
     return;
   }
 
-  // Path line at top (dim)
-  d.fillRect(0, 0, cfg::kScreenW, 10, cfg::kColorBg);
   d.setTextColor(cfg::kColorDim, cfg::kColorBg);
   char pathBuf[cfg::kMaxPathLen + 4];
   snprintf(pathBuf, sizeof(pathBuf), "SD:%s", b.path);
@@ -61,13 +139,14 @@ void Ui::drawBrowse(const BrowseSnapshot& b) {
   }
   d.drawString(pathBuf, 2, 1);
 
-  // List area
   int listY = 12;
-  size_t visible = (b.count > b.scroll) ? b.count - b.scroll : 0;
-  if (visible > cfg::kMaxVisibleRows) visible = cfg::kMaxVisibleRows;
+  size_t visible = (b.count > b.scroll) ? (b.count - b.scroll) : 0;
+  if (visible > static_cast<size_t>(cfg::kMaxVisibleRows)) {
+    visible = cfg::kMaxVisibleRows;
+  }
 
-  for (size_t i = 0; i < cfg::kMaxVisibleRows; ++i) {
-    int y = listY + i * cfg::kListRowH;
+  for (size_t i = 0; i < static_cast<size_t>(cfg::kMaxVisibleRows); ++i) {
+    int y = listY + static_cast<int>(i) * cfg::kListRowH;
     if (i < visible) {
       size_t idx = b.scroll + i;
       bool selected = (idx == b.cursor);
@@ -88,23 +167,26 @@ void Ui::drawBrowse(const BrowseSnapshot& b) {
     }
   }
 
-  // Truncated indicator
-  int hintY = cfg::kScreenH - cfg::kHintBarH;
+  if (b.count == 0) {
+    d.setTextColor(cfg::kColorDim, cfg::kColorBg);
+    d.drawString("(empty)", 4, listY + 2);
+  }
+
   if (b.truncated) {
-    int truncY = hintY - 10;
+    int truncY = cfg::kScreenH - cfg::kHintBarH - 10;
     d.setTextColor(cfg::kColorDim, cfg::kColorBg);
     d.drawString("* truncated", 2, truncY);
   }
 
-  drawHint(";/ move  Ent open  Esc up");
+  drawHint(";/ move  Ent open  Bs back");
 }
 
 void Ui::drawPlaying(const PlayerSnapshot& p) {
   auto& d = M5Cardputer.Display;
-  d.fillScreen(cfg::kColorBg);
+  // Paint solid background once per dirty frame (not every loop).
+  d.fillRect(0, 0, cfg::kScreenW, cfg::kScreenH - cfg::kHintBarH, cfg::kColorBg);
   d.setTextColor(cfg::kColorFg, cfg::kColorBg);
 
-  // Status
   const char* status = "IDLE";
   switch (p.state) {
     case PlayState::Playing: status = "PLAY"; break;
@@ -114,41 +196,44 @@ void Ui::drawPlaying(const PlayerSnapshot& p) {
     default: break;
   }
   d.drawString(status, 4, 4);
-
-  // Filename
   d.drawString(p.fileName, 4, 20);
 
-  // Time mm:ss / mm:ss
   char timeBuf[24];
   if (p.durationMs == 0) {
-    snprintf(timeBuf, sizeof(timeBuf), "--:-- / --:--");
+    uint32_t posSec = p.positionMs / 1000;
+    snprintf(timeBuf, sizeof(timeBuf), "%02lu:%02lu / --:--",
+             static_cast<unsigned long>(posSec / 60),
+             static_cast<unsigned long>(posSec % 60));
   } else {
     uint32_t posSec = p.positionMs / 1000;
     uint32_t durSec = p.durationMs / 1000;
     snprintf(timeBuf, sizeof(timeBuf), "%02lu:%02lu / %02lu:%02lu",
-             (unsigned long)(posSec / 60), (unsigned long)(posSec % 60),
-             (unsigned long)(durSec / 60), (unsigned long)(durSec % 60));
+             static_cast<unsigned long>(posSec / 60),
+             static_cast<unsigned long>(posSec % 60),
+             static_cast<unsigned long>(durSec / 60),
+             static_cast<unsigned long>(durSec % 60));
   }
   d.drawString(timeBuf, 4, 40);
 
-  // Progress bar
-  int barY = 58;
-  int barW = 232;
-  int barX = (cfg::kScreenW - barW) / 2;
-  int barH = 6;
+  const int barY = 58;
+  const int barW = 232;
+  const int barX = (cfg::kScreenW - barW) / 2;
+  const int barH = 6;
   d.drawRect(barX, barY, barW, barH, cfg::kColorDim);
   if (p.durationMs > 0) {
-    int fill = (int)((uint64_t)p.positionMs * (barW - 2) / p.durationMs);
+    int fill = static_cast<int>((static_cast<uint64_t>(p.positionMs) * (barW - 2)) / p.durationMs);
+    if (fill < 0) fill = 0;
     if (fill > barW - 2) fill = barW - 2;
-    d.fillRect(barX + 1, barY + 1, fill, barH - 2, cfg::kColorFg);
+    if (fill > 0) {
+      d.fillRect(barX + 1, barY + 1, fill, barH - 2, cfg::kColorFg);
+    }
   }
 
-  // Volume
   char volBuf[12];
   snprintf(volBuf, sizeof(volBuf), "Vol %d%%", p.volumePercent);
   d.drawString(volBuf, 4, 74);
 
-  drawHint("Spc pause  [] seek  ,. vol  Esc list");
+  drawHint("Spc pause  [] seek  ,= vol  Bs list");
 }
 
 void Ui::drawHint(const char* text) {
@@ -160,12 +245,16 @@ void Ui::drawHint(const char* text) {
 }
 
 void Ui::drawToastIfAny(uint32_t nowMs) {
-  if (toast_.expiresAtMs == 0 || nowMs >= toast_.expiresAtMs) {
+  if (toast_.expiresAtMs == 0) {
+    return;
+  }
+  if (nowMs >= toast_.expiresAtMs) {
     toast_.expiresAtMs = 0;
     return;
   }
   auto& d = M5Cardputer.Display;
-  int tw = strlen(toast_.text) * 6 + 8;
+  int tw = static_cast<int>(strlen(toast_.text)) * 6 + 8;
+  if (tw > cfg::kScreenW - 4) tw = cfg::kScreenW - 4;
   int tx = (cfg::kScreenW - tw) / 2;
   int ty = cfg::kScreenH / 2 - 8;
   d.fillRect(tx, ty, tw, 16, cfg::kColorFg);

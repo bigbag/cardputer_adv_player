@@ -6,19 +6,6 @@ enum class Screen : uint8_t { Browse, Playing };
 enum class EntryKind : uint8_t { Dir, Mp3, Wav };
 enum class PlayState : uint8_t { Idle, Playing, Paused, Done, Error };
 
-enum class Action : uint8_t {
-  None,
-  Up,
-  Down,
-  Enter,
-  Back,
-  Space,
-  VolDown,
-  VolUp,
-  SeekBack,
-  SeekFwd,
-};
-
 struct DirEntry {
   char name[cfg::kMaxNameLen];
   EntryKind kind;
