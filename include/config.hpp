@@ -29,7 +29,8 @@ constexpr int kSdCs = 12;
 constexpr int kSdMosi = 14;
 constexpr int kSdSck = 40;
 constexpr int kSdMiso = 39;
-constexpr uint32_t kSdSpiHz = 15000000;
+// Start conservative; many microSD cards fail mount at 15–25 MHz on this bus.
+constexpr uint32_t kSdSpiHz = 4000000;
 
 // UI
 constexpr uint16_t kColorBg = 0x0000;      // black

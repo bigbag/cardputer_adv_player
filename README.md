@@ -52,6 +52,21 @@ If the port does not appear or upload fails:
 
 Leave the side power switch **ON** while charging.
 
+## SD card format
+
+Use **FAT32** (or FAT16 on very small cards). The Arduino `SD` library does **not**
+mount **exFAT**.
+
+Practical tips if you see **No SD card**:
+
+1. Format as **FAT32**, MBR partition table (not exFAT / not APFS).
+2. Prefer a full-size format from a PC (Windows “FAT32”, macOS Disk Utility MS-DOS
+   (FAT), or `mkfs.vfat`). Avoid “quick” quirks on some cameras.
+3. Use a known-good card ≤32 GB if possible (64 GB+ often ships as exFAT).
+4. Seat the card fully; power-cycle after insert.
+5. On the Browse screen press **Enter** to retry mount.
+6. Watch serial (`make monitor`) for `[sd] mount ok/fail @ … Hz` lines.
+
 ## Suggested SD layout
 
 ```text

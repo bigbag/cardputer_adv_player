@@ -19,11 +19,34 @@ static int cmpInsensitive(const char* a, const char* b) {
 }
 
 bool SdBrowser::begin() {
+  pinMode(cfg::kSdCs, OUTPUT);
+  digitalWrite(cfg::kSdCs, HIGH);
   SPI.begin(cfg::kSdSck, cfg::kSdMiso, cfg::kSdMosi, cfg::kSdCs);
-  sdOk_ = SD.begin(cfg::kSdCs, SPI, cfg::kSdSpiHz);
+
+  // Try slow first (most reliable), then step up if the card accepts it.
+  static const uint32_t kSpeeds[] = {
+      cfg::kSdSpiHz,  // 4 MHz default
+      10000000u,
+      15000000u,
+  };
+
+  sdOk_ = false;
+  for (uint32_t hz : kSpeeds) {
+    SD.end();
+    delay(20);
+    if (SD.begin(cfg::kSdCs, SPI, hz)) {
+      sdOk_ = true;
+      Serial.printf("[sd] mount ok @ %lu Hz\n", static_cast<unsigned long>(hz));
+      break;
+    }
+    Serial.printf("[sd] mount fail @ %lu Hz\n", static_cast<unsigned long>(hz));
+  }
+
   if (sdOk_) {
     std::strcpy(path_, "/");
     listCurrent();
+  } else {
+    Serial.println("[sd] No card or unsupported FS (need FAT16/FAT32, not exFAT)");
   }
   return sdOk_;
 }
