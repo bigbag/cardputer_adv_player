@@ -22,6 +22,7 @@ class App {
   void openSettings();
   void closeSettings();
   void applySettings();
+  void persistSettings();  // apply + write SD immediately
   void playSelection();
   void noteActivity(uint32_t nowMs);
   void updateDisplayPower(uint32_t nowMs);

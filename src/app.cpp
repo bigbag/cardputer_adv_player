@@ -56,13 +56,16 @@ void App::openSettings() {
 }
 
 void App::closeSettings() {
+  // Values already auto-saved on each change.
   applySettings();
-  if (settings_.save()) {
-    ui_.showToast("Saved", millis());
-  } else {
+  screen_ = settingsReturn_;
+}
+
+void App::persistSettings() {
+  applySettings();
+  if (!settings_.save()) {
     ui_.showToast("Save fail (SD?)", millis());
   }
-  screen_ = settingsReturn_;
 }
 
 void App::noteActivity(uint32_t nowMs) {
@@ -183,12 +186,12 @@ void App::handlePlaying(Action a) {
     case Action::VolUp:
       player_.adjustVolume(cfg::kVolumeStepPercent);
       settings_.setVolumePercent(player_.volumePercent());
-      settings_.save();  // persist immediately
+      persistSettings();
       break;
     case Action::VolDown:
       player_.adjustVolume(-cfg::kVolumeStepPercent);
       settings_.setVolumePercent(player_.volumePercent());
-      settings_.save();
+      persistSettings();
       break;
     case Action::SeekFwd:
       player_.seekRelative(cfg::kSeekStepSeconds);
@@ -205,6 +208,7 @@ void App::handlePlaying(Action a) {
 }
 
 void App::handleSettings(Action a) {
+  bool changed = false;
   switch (a) {
     case Action::Up:
       settings_.moveCursor(-1);
@@ -215,20 +219,23 @@ void App::handleSettings(Action a) {
     case Action::VolUp:
     case Action::SeekFwd:
       switch (settings_.cursor()) {
-        case 0: settings_.cycleTheme(+1); break;
+        case 0: settings_.cycleTheme(+1); changed = true; break;
         case 1:
           settings_.adjustVolume(+cfg::kVolumeStepPercent);
           player_.setVolumePercent(settings_.volumePercent());
+          changed = true;
           break;
         case 2:
           settings_.adjustBrightness(+15);
           ui_.setBrightness(settings_.brightness());
           M5Cardputer.Display.setBrightness(settings_.brightness());
+          changed = true;
           break;
-        case 3: settings_.cycleDisplayTimeout(); break;
+        case 3: settings_.cycleDisplayTimeout(); changed = true; break;
         case 4:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
+          changed = true;
           break;
         default: break;
       }
@@ -236,25 +243,30 @@ void App::handleSettings(Action a) {
     case Action::VolDown:
     case Action::SeekBack:
       switch (settings_.cursor()) {
-        case 0: settings_.cycleTheme(-1); break;
+        case 0: settings_.cycleTheme(-1); changed = true; break;
         case 1:
           settings_.adjustVolume(-cfg::kVolumeStepPercent);
           player_.setVolumePercent(settings_.volumePercent());
+          changed = true;
           break;
         case 2:
           settings_.adjustBrightness(-15);
           ui_.setBrightness(settings_.brightness());
           M5Cardputer.Display.setBrightness(settings_.brightness());
+          changed = true;
           break;
         case 3:
+          // step backward through timeout cycle
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
+          changed = true;
           break;
         case 4:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
+          changed = true;
           break;
         default: break;
       }
@@ -262,11 +274,12 @@ void App::handleSettings(Action a) {
     case Action::Enter:
     case Action::Space:
       switch (settings_.cursor()) {
-        case 0: settings_.cycleTheme(+1); break;
-        case 3: settings_.cycleDisplayTimeout(); break;
+        case 0: settings_.cycleTheme(+1); changed = true; break;
+        case 3: settings_.cycleDisplayTimeout(); changed = true; break;
         case 4:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
+          changed = true;
           break;
         default: break;
       }
@@ -277,6 +290,9 @@ void App::handleSettings(Action a) {
       break;
     default:
       break;
+  }
+  if (changed) {
+    persistSettings();
   }
 }
 
