@@ -8,7 +8,6 @@
 
 static constexpr i2s_port_t kI2sPort = I2S_NUM_0;
 
-// M5Unified Cardputer-ADV ES8311 enable. DAC 0xBF = ±0 dB.
 static const uint8_t kEs8311InitSeq[][2] = {
     {0x00, 0x80},
     {0x01, 0xB5},
@@ -36,30 +35,50 @@ bool AudioOut::esInitRegisters() {
   return true;
 }
 
-// Wide diapason: soft = (UI/100)^exp * 100
-// UI 15 → ~2%, 30 → 9%, 50 → 25%, 70 → 49%, 100 → 100% (before boost)
-int AudioOut::softScaleFromUi() const {
+// High-precision: out = in * (UI/100)^exp * boost
+// = in * UI^exp * boost / 100^exp
+// Keeps quiet-zone steps distinct (integer soft% crushed 0–25 into one step).
+void AudioOut::recomputeMul() {
   int v = volume_;
-  if (v <= 0) return 0;
+  if (v < 0) v = 0;
   if (v > 100) v = 100;
 
-  // Integer power: v^exp / 100^(exp-1)
-  int32_t p = v;
-  for (int e = 1; e < cfg::kVolCurveExpNum; ++e) {
-    p = (p * v) / 100;
+  if (v == 0) {
+    mulNum_ = 0;
+    mulDen_ = 1;
+    return;
   }
-  if (p < 1) p = 1;
-  if (p > 100) p = 100;
-  return static_cast<int>(p);
+
+  // num = v^exp * boost ; den = 100^exp
+  int64_t num = v;
+  int64_t den = 100;
+  for (int e = 1; e < cfg::kVolCurveExpNum; ++e) {
+    num *= v;
+    den *= 100;
+  }
+  num *= cfg::kVolPcmBoost;
+
+  // Reduce fraction a bit to fit int32 multiply path
+  while (num > 2000000000LL || den > 2000000000LL) {
+    num /= 2;
+    den /= 2;
+  }
+  if (num < 1) num = 1;
+  if (den < 1) den = 1;
+  mulNum_ = static_cast<int32_t>(num);
+  mulDen_ = static_cast<int32_t>(den);
 }
 
 void AudioOut::applyVolume() {
-  softScale_ = softScaleFromUi();
-  esWrite(0x32, 0xBF);  // fixed 0 dB; range is all digital
+  recomputeMul();
+  esWrite(0x32, 0xBF);
 
-  const int mul = softScale_ * cfg::kVolPcmBoost;
-  Serial.printf("[audio] ui=%d%% soft=%d%% pcmMul=%d (boost×%d)\n", volume_,
-                softScale_, mul, cfg::kVolPcmBoost);
+  // Log effective % of full-scale after curve+boost (100% UI with boost3 → 300%)
+  const int effPct = (volume_ <= 0)
+                         ? 0
+                         : static_cast<int>((100LL * mulNum_) / mulDen_);
+  Serial.printf("[audio] ui=%d%% eff~%d%% (×%ld/%ld)\n", volume_, effPct,
+                static_cast<long>(mulNum_), static_cast<long>(mulDen_));
 }
 
 bool AudioOut::i2sStart(uint32_t rate) {
@@ -116,8 +135,8 @@ bool AudioOut::begin() {
   volume_ = cfg::kDefaultVolumePercent;
   applyVolume();
   ready_ = true;
-  Serial.printf("[audio] ready wide-range vol (exp=%d boost×%d)\n",
-                cfg::kVolCurveExpNum, cfg::kVolPcmBoost);
+  Serial.printf("[audio] ready quiet-zone curve exp=%d boost×%d step=%d\n",
+                cfg::kVolCurveExpNum, cfg::kVolPcmBoost, cfg::kVolumeStepPercent);
   return true;
 }
 
@@ -148,22 +167,22 @@ size_t AudioOut::write(const int16_t* stereoFrames, size_t frames) {
   constexpr size_t kChunkFrames = 128;
   int16_t buf[kChunkFrames * 2];
   size_t written = 0;
-
-  // mul = softScale (0..100) * boost  → 0 .. 100*boost
-  const int mul = softScale_ * cfg::kVolPcmBoost;
+  const int32_t num = mulNum_;
+  const int32_t den = mulDen_;
 
   while (written < frames) {
     size_t n = frames - written;
     if (n > kChunkFrames) n = kChunkFrames;
 
     const int16_t* src = stereoFrames + written * 2;
-    if (mul <= 0) {
+    if (num <= 0) {
       std::memset(buf, 0, n * 4);
-    } else if (mul == 100) {
+    } else if (num == den) {
       std::memcpy(buf, src, n * 4);
     } else {
       for (size_t i = 0; i < n * 2; ++i) {
-        int32_t s = (static_cast<int32_t>(src[i]) * mul) / 100;
+        int32_t s = static_cast<int32_t>(
+            (static_cast<int64_t>(src[i]) * num) / den);
         if (s > 32767) s = 32767;
         if (s < -32768) s = -32768;
         buf[i] = static_cast<int16_t>(s);

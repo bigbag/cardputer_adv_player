@@ -41,18 +41,21 @@ constexpr uint32_t kDisplayTimeoutMs = 10000;
 constexpr size_t kMaxDirEntries = 256;
 constexpr size_t kMaxPathLen = 256;
 constexpr size_t kMaxNameLen = 64;
-constexpr int kVolumeStepPercent = 5;
+// Finer steps so the expanded quiet zone is usable (HP lives in low UI).
+constexpr int kVolumeStepPercent = 2;
 constexpr int kSeekStepSeconds = 5;
-// Start mid-low: ok-ish on jack; raise for speaker.
-constexpr int kDefaultVolumePercent = 45;
+// Default in the quiet/mid band (headphones-friendly).
+constexpr int kDefaultVolumePercent = 30;
 constexpr uint32_t kToastMs = 1500;
 
-// Single wide volume range (no Spk/HP split — no jack detect on MCU).
-// soft% = (UI/100)^kVolCurveExp * 100, then PCM * kVolPcmBoost with clip.
-// Low UI → very quiet (headphones). High UI → boosted (tiny speaker).
-// Exp 2.0: 20→4%, 40→16%, 60→36%, 80→64%, 100→100% before boost.
-constexpr int kVolCurveExpNum = 2;     // integer exponent
-constexpr int kVolPcmBoost = 3;        // ×3 at UI 100% (speaker usable; turn down for jack)
+// Single wide volume: soft% = (UI/100)^exp * 100, then PCM × boost.
+// Cubic keeps a large quiet zone for the hot 3.5mm jack; top still reaches
+// speaker-usable levels via boost.
+// UI→soft% (before ×3 boost): 10→0.1%, 20→0.8%, 30→2.7%, 40→6.4%,
+// 50→12.5%, 60→21.6%, 70→34%, 80→51%, 90→73%, 100→100%.
+// Practical: ~10–45 headphones, ~55–80 speaker, ~85–100 loud speaker.
+constexpr int kVolCurveExpNum = 3;
+constexpr int kVolPcmBoost = 3;
 
 // Audio task
 constexpr uint32_t kDefaultSampleRate = 44100;

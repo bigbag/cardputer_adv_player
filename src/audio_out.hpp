@@ -21,10 +21,12 @@ class AudioOut {
   bool i2sStart(uint32_t rate);
   void i2sStop();
   void applyVolume();
-  int softScaleFromUi() const;
+  // sample * mulNum_ / mulDen_  (high-res curve + boost)
+  void recomputeMul();
 
   uint32_t rate_ = 0;
   int volume_ = 45;
   bool ready_ = false;
-  int softScale_ = 100;  // 0..100 before PCM boost
+  int32_t mulNum_ = 0;
+  int32_t mulDen_ = 1;
 };
