@@ -31,4 +31,5 @@ class SdBrowser {
   size_t scroll_ = 0;
   void sortEntries();
   void ensureScroll();
+  bool listCurrentArduino();  // slow fallback
 };

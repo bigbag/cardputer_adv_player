@@ -6,6 +6,13 @@
 #include <SPI.h>
 #include <cstring>
 #include <algorithm>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <cerrno>
+#include <cstdio>
+
+// ESP32 Arduino SD mounts at this VFS path (SD.begin default).
+static constexpr const char* kSdMount = "/sd";
 
 static int cmpInsensitive(const char* a, const char* b) {
   while (*a && *b) {
@@ -16,6 +23,23 @@ static int cmpInsensitive(const char* a, const char* b) {
     ++b;
   }
   return static_cast<unsigned char>(*a) - static_cast<unsigned char>(*b);
+}
+
+static bool isAudioName(const char* name) {
+  return path::hasExtInsensitive(name, ".mp3") || path::hasExtInsensitive(name, ".wav");
+}
+
+// Build VFS absolute path: "/sd" + path_  (path_ always starts with '/').
+static bool makeVfsPath(char* out, size_t cap, const char* relPath) {
+  if (!out || cap < 4 || !relPath) return false;
+  if (relPath[0] == '/' && relPath[1] == '\0') {
+    // root
+    std::snprintf(out, cap, "%s", kSdMount);
+    return true;
+  }
+  // "/sd" + "/Music/foo"
+  int n = std::snprintf(out, cap, "%s%s", kSdMount, relPath);
+  return n > 0 && static_cast<size_t>(n) < cap;
 }
 
 bool SdBrowser::begin() {
@@ -36,7 +60,8 @@ bool SdBrowser::begin() {
     delay(20);
     if (SD.begin(cfg::kSdCs, SPI, hz)) {
       sdOk_ = true;
-      Serial.printf("[sd] mount ok @ %lu Hz\n", static_cast<unsigned long>(hz));
+      Serial.printf("[sd] mount ok @ %lu Hz (vfs %s)\n",
+                    static_cast<unsigned long>(hz), kSdMount);
       break;
     }
     Serial.printf("[sd] mount fail @ %lu Hz\n", static_cast<unsigned long>(hz));
@@ -44,7 +69,7 @@ bool SdBrowser::begin() {
 
   if (sdOk_) {
     std::strcpy(path_, "/");
-    listCurrent();
+    // Caller (App) lists once after begin — avoid double scan.
   } else {
     Serial.println("[sd] No card or unsupported FS (need FAT16/FAT32, not exFAT)");
   }
@@ -62,27 +87,67 @@ bool SdBrowser::sdOk() const { return sdOk_; }
 bool SdBrowser::listCurrent() {
   count_ = 0;
   truncated_ = false;
+  cursor_ = 0;
+  scroll_ = 0;
   if (!sdOk_) return false;
 
-  File dir = SD.open(path_);
-  if (!dir || !dir.isDirectory()) return false;
+  const uint32_t t0 = millis();
+
+  // Fast path: POSIX readdir — no per-entry File open/stat heap (unlike openNextFile).
+  // FATFS already caches directory sectors; "batching" here means draining the
+  // dir stream in one pass without opening each child inode.
+  char vfsPath[cfg::kMaxPathLen + 8];
+  if (!makeVfsPath(vfsPath, sizeof(vfsPath), path_)) {
+    Serial.println("[sd] path too long");
+    return false;
+  }
+
+  DIR* dir = ::opendir(vfsPath);
+  if (!dir) {
+    // Fallback: Arduino SD API (slower — opens every entry).
+    Serial.printf("[sd] opendir(%s) failed — Arduino fallback\n", vfsPath);
+    return listCurrentArduino();
+  }
+
+  // Scratch for rare DT_UNKNOWN stat.
+  char childPath[cfg::kMaxPathLen + 16];
 
   while (true) {
-    File entry = dir.openNextFile();
-    if (!entry) break;
-
-    const char* name = entry.name();
-    if (!name || name[0] == '.') { entry.close(); continue; }
-
-    bool isDir = entry.isDirectory();
-    entry.close();
-
-    if (!isDir) {
-      if (!path::hasExtInsensitive(name, ".mp3") &&
-          !path::hasExtInsensitive(name, ".wav")) {
-        continue;
+    errno = 0;
+    struct dirent* ent = ::readdir(dir);
+    if (!ent) {
+      if (errno != 0) {
+        Serial.printf("[sd] readdir errno=%d\n", errno);
       }
+      break;
     }
+
+    const char* name = ent->d_name;
+    // Skip hidden + "." / ".."
+    if (!name || name[0] == '\0' || name[0] == '.') continue;
+
+    bool isDir = false;
+    bool known = true;
+    // ESP-IDF dirent may only define DT_DIR / DT_REG / DT_UNKNOWN.
+    if (ent->d_type == DT_DIR) {
+      isDir = true;
+    } else if (ent->d_type == DT_REG) {
+      isDir = false;
+    } else {
+      known = false;  // DT_UNKNOWN or other — stat once
+    }
+
+    if (!known) {
+      // One stat only when d_type is unreliable (some FAT builds).
+      const int n = std::snprintf(childPath, sizeof(childPath), "%s/%s", vfsPath, name);
+      if (n <= 0 || static_cast<size_t>(n) >= sizeof(childPath)) continue;
+      struct stat st{};
+      if (::stat(childPath, &st) != 0) continue;
+      isDir = S_ISDIR(st.st_mode);
+      if (!isDir && !S_ISREG(st.st_mode)) continue;
+    }
+
+    if (!isDir && !isAudioName(name)) continue;
 
     if (count_ >= cfg::kMaxDirEntries) {
       truncated_ = true;
@@ -95,10 +160,51 @@ bool SdBrowser::listCurrent() {
     ++count_;
   }
 
+  ::closedir(dir);
+  sortEntries();
+
+  const uint32_t dt = millis() - t0;
+  Serial.printf("[sd] list %s → %u entries%s in %lums (readdir)\n", path_,
+                static_cast<unsigned>(count_), truncated_ ? " (trunc)" : "",
+                static_cast<unsigned long>(dt));
+  return true;
+}
+
+bool SdBrowser::listCurrentArduino() {
+  // Slow path kept as fallback if VFS opendir is unavailable.
+  File dir = SD.open(path_);
+  if (!dir || !dir.isDirectory()) {
+    if (dir) dir.close();
+    return false;
+  }
+
+  // Prefer getNextFileName(isDir) — readdir without opening each child File.
+  while (true) {
+    bool isDir = false;
+    String full = dir.getNextFileName(&isDir);
+    if (full.length() == 0) break;
+
+    // full is absolute path under mount ("/sd/...") or relative; take basename.
+    const char* p = full.c_str();
+    const char* slash = std::strrchr(p, '/');
+    const char* name = slash ? slash + 1 : p;
+    if (!name || name[0] == '\0' || name[0] == '.') continue;
+    if (!isDir && !isAudioName(name)) continue;
+
+    if (count_ >= cfg::kMaxDirEntries) {
+      truncated_ = true;
+      break;
+    }
+    std::strncpy(entries_[count_].name, name, cfg::kMaxNameLen - 1);
+    entries_[count_].name[cfg::kMaxNameLen - 1] = '\0';
+    entries_[count_].kind = isDir ? EntryKind::Dir : path::kindFromName(name);
+    ++count_;
+  }
+
   dir.close();
   sortEntries();
-  cursor_ = 0;
-  scroll_ = 0;
+  Serial.printf("[sd] list %s → %u entries%s (arduino)\n", path_,
+                static_cast<unsigned>(count_), truncated_ ? " (trunc)" : "");
   return true;
 }
 
@@ -182,6 +288,7 @@ BrowseSnapshot SdBrowser::snapshot() const {
 }
 
 void SdBrowser::sortEntries() {
+  // dirs first, then case-insensitive name. n≤256 — std::sort is fine.
   std::sort(entries_, entries_ + count_, [](const DirEntry& a, const DirEntry& b) {
     if (a.kind == EntryKind::Dir && b.kind != EntryKind::Dir) return true;
     if (a.kind != EntryKind::Dir && b.kind == EntryKind::Dir) return false;
