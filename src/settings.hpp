@@ -4,7 +4,6 @@
 #include "theme.hpp"
 #include <cstdint>
 
-// Persistent app settings (NVS when available).
 class Settings {
  public:
   void load();
@@ -18,6 +17,10 @@ class Settings {
   void setHpVolume(int v);
   void adjustSpeakerVolume(int delta);
   void adjustHpVolume(int delta);
+
+  OutputRoute route() const { return route_; }
+  void setRoute(OutputRoute r);
+  void toggleRoute();
 
   uint8_t brightness() const { return brightness_; }
   void setBrightness(uint8_t b);
@@ -35,8 +38,8 @@ class Settings {
   void cycleTheme(int delta);
   const Theme& theme() const { return themes::get(themeIndex_); }
 
-  // Rows: Theme, Vol spk, Vol HP, Brightness, Scr timeout, Auto-next
-  static constexpr size_t kCount = 6;
+  // Theme, Output, Vol spk, Vol HP, Brightness, Scr timeout, Auto-next
+  static constexpr size_t kCount = 7;
   size_t cursor() const { return cursor_; }
   void moveCursor(int delta);
 
@@ -46,6 +49,7 @@ class Settings {
  private:
   int speakerVol_ = 70;
   int hpVol_ = 40;
+  OutputRoute route_ = OutputRoute::Speaker;
   uint8_t brightness_ = 128;
   uint32_t displayTimeoutMs_ = 10000;
   bool autoNext_ = true;

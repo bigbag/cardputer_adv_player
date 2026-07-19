@@ -16,11 +16,12 @@ constexpr int kI2cSda = 8;
 constexpr int kI2cScl = 9;
 
 // ES8311 / I2S (Cardputer-ADV)
+// Schematic: G41=BCLK, G43=LRCK, G42=DSDIN(DAC), G46=ASDOUT(ADC only).
+// NS4150B AMP_EN is driven by the 3.5mm jack MOSFET (Q4) — NOT an ESP32 GPIO.
+// There is no MCU headphone-detect pin; speaker mute on plug is hardware-only.
 constexpr int kI2sBclk = 41;
 constexpr int kI2sLrck = 43;
 constexpr int kI2sDout = 42;
-constexpr int kHpDetectPin = 17;   // LOW = headphones inserted
-constexpr int kAmpEnablePin = 46;  // HIGH = speaker amp on
 constexpr uint8_t kEs8311Addr = 0x18;
 constexpr uint32_t kEs8311I2cHz = 400000;
 

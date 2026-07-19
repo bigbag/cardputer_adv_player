@@ -31,6 +31,9 @@ class Player {
   void seekRelative(int deltaSeconds);
   void service();
   void setAutoNext(bool on) { autoNextEnabled_ = on; }
+  void setRoute(OutputRoute r);
+  OutputRoute route() const;
+  void toggleRoute();
   bool autoNext() const { return autoNextEnabled_; }
   PlayerSnapshot snapshot() const;
   bool takeError(char* buf, size_t cap);

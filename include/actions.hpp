@@ -14,4 +14,5 @@ enum class Action : uint8_t {
   SeekBack,
   RetrySd,
   Settings,  // open settings (Tab or 's')
+  ToggleOutput,  // switch Spk / HP volume profile ('h')
 };

@@ -8,16 +8,17 @@
 
 static constexpr i2s_port_t kI2sPort = I2S_NUM_0;
 
-// M5Unified::_speaker_enabled_cb_cardputer_adv bulk write.
+// M5Unified::_speaker_enabled_cb_cardputer_adv (exact sequence).
+// DAC 0xBF = ±0 dB. Amp mute on jack insert is hardware (MOSFET Q4).
 static const uint8_t kEs8311InitSeq[][2] = {
-    {0x00, 0x80},  // RESET / CSM POWER ON
-    {0x01, 0xB5},  // CLOCK_MANAGER / MCLK=BCLK
-    {0x02, 0x18},  // CLOCK_MANAGER / MULT_PRE=3
-    {0x0D, 0x01},  // SYSTEM / power up analog
-    {0x12, 0x00},  // SYSTEM / power-up DAC
-    {0x13, 0x10},  // SYSTEM / enable HP drive
-    {0x32, 0xBF},  // DAC volume ±0 dB
-    {0x37, 0x08},  // DAC EQ bypass
+    {0x00, 0x80},
+    {0x01, 0xB5},
+    {0x02, 0x18},
+    {0x0D, 0x01},
+    {0x12, 0x00},
+    {0x13, 0x10},
+    {0x32, 0xBF},
+    {0x37, 0x08},
 };
 
 bool AudioOut::esWrite(uint8_t reg, uint8_t val) {
@@ -36,7 +37,7 @@ bool AudioOut::esInitRegisters() {
   return true;
 }
 
-// DAC volume stays high; fine loudness is soft (M5 style).
+// Keep DAC near 0 dB; fine loudness via softScale (M5 master_volume^2 style).
 uint8_t AudioOut::esDacRegFromPercent(int percent) {
   if (percent <= 0) return 0x00;
   if (percent > 100) percent = 100;
@@ -44,24 +45,24 @@ uint8_t AudioOut::esDacRegFromPercent(int percent) {
   return static_cast<uint8_t>(reg);
 }
 
-// M5-style: amplitude ∝ volume².
-// Speaker needs higher UI to be loud; HP is more sensitive.
 int AudioOut::effectiveVolumePercent() const {
   const int v = activeVolume();
   if (v <= 0) return 0;
-  const int sq = (v * v) / 100;  // 0..100
+  // Amplitude ∝ volume² (same idea as M5Unified Speaker_Class).
+  const int sq = (v * v) / 100;
   return sq < 1 ? 1 : sq;
 }
 
 void AudioOut::applyVolume() {
+  const int ui = activeVolume();
   const int eff = effectiveVolumePercent();
-  const uint8_t dac = esDacRegFromPercent(activeVolume());
+  const uint8_t dac = esDacRegFromPercent(ui);
   esWrite(0x32, dac);
   softScale_ = eff;
 
-  Serial.printf("[audio] %s vol=%d%% soft=%d%% dac=0x%02X ampEn=%d\n",
-                hpInserted_ ? "hp" : "spk", activeVolume(), softScale_, dac,
-                digitalRead(cfg::kAmpEnablePin));
+  Serial.printf("[audio] route=%s ui=%d%% soft=%d%% dac=0x%02X\n",
+                route_ == OutputRoute::Headphone ? "HP" : "SPK", ui, softScale_,
+                dac);
 }
 
 bool AudioOut::i2sStart(uint32_t rate) {
@@ -106,9 +107,8 @@ void AudioOut::i2sStop() {
 }
 
 bool AudioOut::begin() {
-  pinMode(cfg::kHpDetectPin, INPUT_PULLUP);
-  pinMode(cfg::kAmpEnablePin, OUTPUT);
-  digitalWrite(cfg::kAmpEnablePin, HIGH);
+  // Do NOT drive G46 — schematic ties it to ES8311 ASDOUT (mic ADC).
+  // Amp enable is hardware (jack MOSFET), not software.
 
   Wire.begin(cfg::kI2cSda, cfg::kI2cScl, 100000);
   delay(10);
@@ -119,28 +119,17 @@ bool AudioOut::begin() {
   }
   if (!i2sStart(cfg::kDefaultSampleRate)) return false;
 
-  const int hpRaw = digitalRead(cfg::kHpDetectPin);
-  hpInserted_ = (hpRaw == LOW);
-  Serial.printf("[audio] HP G%d raw=%d → %s\n", cfg::kHpDetectPin, hpRaw,
-                hpInserted_ ? "jack" : "speaker");
-
-  updateAmpFromHp();
-  if (!hpInserted_) {
-    digitalWrite(cfg::kAmpEnablePin, HIGH);
-  }
-
   speakerVol_ = cfg::kDefaultSpeakerVolumePercent;
   hpVol_ = cfg::kDefaultHpVolumePercent;
+  route_ = OutputRoute::Speaker;
   applyVolume();
   ready_ = true;
-  Serial.printf("[audio] ready spk=%d%% hp=%d%% ampEn=%d\n", speakerVol_, hpVol_,
-                digitalRead(cfg::kAmpEnablePin));
+  Serial.println("[audio] ready (route=SPK; press H to switch HP profile)");
   return true;
 }
 
 void AudioOut::end() {
   i2sStop();
-  digitalWrite(cfg::kAmpEnablePin, LOW);
   ready_ = false;
 }
 
@@ -150,8 +139,6 @@ bool AudioOut::setSampleRate(uint32_t hz) {
   i2sStop();
   if (!i2sStart(hz)) return false;
   applyVolume();
-  updateAmpFromHp();
-  if (!hpInserted_) digitalWrite(cfg::kAmpEnablePin, HIGH);
   return true;
 }
 
@@ -159,18 +146,18 @@ void AudioOut::setSpeakerVolume(int percent) {
   if (percent < 0) percent = 0;
   if (percent > 100) percent = 100;
   speakerVol_ = percent;
-  if (ready_ && !hpInserted_) applyVolume();
+  if (ready_ && route_ == OutputRoute::Speaker) applyVolume();
 }
 
 void AudioOut::setHpVolume(int percent) {
   if (percent < 0) percent = 0;
   if (percent > 100) percent = 100;
   hpVol_ = percent;
-  if (ready_ && hpInserted_) applyVolume();
+  if (ready_ && route_ == OutputRoute::Headphone) applyVolume();
 }
 
 void AudioOut::setVolumePercent(int percent) {
-  if (hpInserted_) {
+  if (route_ == OutputRoute::Headphone) {
     setHpVolume(percent);
   } else {
     setSpeakerVolume(percent);
@@ -178,6 +165,19 @@ void AudioOut::setVolumePercent(int percent) {
 }
 
 int AudioOut::volumePercent() const { return activeVolume(); }
+
+void AudioOut::setRoute(OutputRoute r) {
+  if (r == route_) return;
+  route_ = r;
+  if (ready_) applyVolume();
+  Serial.printf("[audio] output profile → %s\n",
+                route_ == OutputRoute::Headphone ? "HP" : "SPK");
+}
+
+void AudioOut::toggleRoute() {
+  setRoute(route_ == OutputRoute::Headphone ? OutputRoute::Speaker
+                                            : OutputRoute::Headphone);
+}
 
 size_t AudioOut::write(const int16_t* stereoFrames, size_t frames) {
   if (!ready_ || frames == 0) return 0;
@@ -211,32 +211,8 @@ size_t AudioOut::write(const int16_t* stereoFrames, size_t frames) {
   return written;
 }
 
-void AudioOut::updateAmpFromHp() {
-  const int hpRaw = digitalRead(cfg::kHpDetectPin);
-  const bool hp = (hpRaw == LOW);
-
-  digitalWrite(cfg::kAmpEnablePin, hp ? LOW : HIGH);
-
-  if (hp != hpInserted_) {
-    hpInserted_ = hp;
-    Serial.printf("[audio] route %s (HP raw=%d ampEn=%d)\n",
-                  hp ? "jack" : "speaker", hpRaw,
-                  digitalRead(cfg::kAmpEnablePin));
-    if (ready_) applyVolume();
-  } else {
-    hpInserted_ = hp;
-  }
-}
-
-bool AudioOut::headphonesInserted() const {
-  return digitalRead(cfg::kHpDetectPin) == LOW;
-}
-
 bool AudioOut::playTestBeep(uint32_t freqHz, uint32_t ms) {
   if (!ready_) return false;
-
-  updateAmpFromHp();
-  if (!hpInserted_) digitalWrite(cfg::kAmpEnablePin, HIGH);
 
   uint32_t totalFrames = rate_ * ms / 1000;
   constexpr size_t kChunk = 128;

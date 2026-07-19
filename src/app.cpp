@@ -39,6 +39,7 @@ void App::begin() {
 void App::applySettings() {
   player_.setSpeakerVolume(settings_.speakerVolume());
   player_.setHpVolume(settings_.hpVolume());
+  player_.setRoute(settings_.route());
   player_.setAutoNext(settings_.autoNext());
   ui_.setBrightness(settings_.brightness());
   if (ui_.displayOn()) {
@@ -79,7 +80,6 @@ void App::updateDisplayPower(uint32_t nowMs) {
 void App::loop() {
   const uint32_t now = millis();
   M5Cardputer.update();
-  audio_.updateAmpFromHp();
   player_.service();
 
   Action a = input_.poll(screen_);
@@ -128,6 +128,13 @@ void App::handle(Action a) {
 
 void App::handleBrowse(Action a) {
   switch (a) {
+    case Action::ToggleOutput: {
+      player_.toggleRoute();
+      settings_.setRoute(player_.route());
+      ui_.showToast(player_.route() == OutputRoute::Headphone ? "Output: HP" : "Output: Spk",
+                    millis());
+      break;
+    }
     case Action::Up:
       browser_.moveCursor(-1);
       break;
@@ -172,14 +179,25 @@ void App::handlePlaying(Action a) {
       break;
     case Action::VolUp: {
       player_.adjustVolume(cfg::kVolumeStepPercent);
-      if (player_.snapshot().hpMode) settings_.setHpVolume(player_.hpVolume());
-      else settings_.setSpeakerVolume(player_.speakerVolume());
+      if (player_.route() == OutputRoute::Headphone)
+        settings_.setHpVolume(player_.hpVolume());
+      else
+        settings_.setSpeakerVolume(player_.speakerVolume());
       break;
     }
     case Action::VolDown: {
       player_.adjustVolume(-cfg::kVolumeStepPercent);
-      if (player_.snapshot().hpMode) settings_.setHpVolume(player_.hpVolume());
-      else settings_.setSpeakerVolume(player_.speakerVolume());
+      if (player_.route() == OutputRoute::Headphone)
+        settings_.setHpVolume(player_.hpVolume());
+      else
+        settings_.setSpeakerVolume(player_.speakerVolume());
+      break;
+    }
+    case Action::ToggleOutput: {
+      player_.toggleRoute();
+      settings_.setRoute(player_.route());
+      ui_.showToast(player_.route() == OutputRoute::Headphone ? "Output: HP" : "Output: Spk",
+                    millis());
       break;
     }
     case Action::SeekFwd:
@@ -207,82 +225,85 @@ void App::handleSettings(Action a) {
     case Action::VolUp:
     case Action::SeekFwd:
       switch (settings_.cursor()) {
-        case 0:
-          settings_.cycleTheme(+1);
-          break;
+        case 0: settings_.cycleTheme(+1); break;
         case 1:
+          settings_.toggleRoute();
+          player_.setRoute(settings_.route());
+          break;
+        case 2:
           settings_.adjustSpeakerVolume(+cfg::kVolumeStepPercent);
           player_.setSpeakerVolume(settings_.speakerVolume());
           break;
-        case 2:
+        case 3:
           settings_.adjustHpVolume(+cfg::kVolumeStepPercent);
           player_.setHpVolume(settings_.hpVolume());
           break;
-        case 3:
+        case 4:
           settings_.adjustBrightness(+15);
           ui_.setBrightness(settings_.brightness());
           M5Cardputer.Display.setBrightness(settings_.brightness());
           break;
-        case 4:
-          settings_.cycleDisplayTimeout();
-          break;
-        case 5:
+        case 5: settings_.cycleDisplayTimeout(); break;
+        case 6:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
           break;
-        default:
-          break;
+        default: break;
       }
       break;
     case Action::VolDown:
     case Action::SeekBack:
       switch (settings_.cursor()) {
-        case 0:
-          settings_.cycleTheme(-1);
-          break;
+        case 0: settings_.cycleTheme(-1); break;
         case 1:
+          settings_.toggleRoute();
+          player_.setRoute(settings_.route());
+          break;
+        case 2:
           settings_.adjustSpeakerVolume(-cfg::kVolumeStepPercent);
           player_.setSpeakerVolume(settings_.speakerVolume());
           break;
-        case 2:
+        case 3:
           settings_.adjustHpVolume(-cfg::kVolumeStepPercent);
           player_.setHpVolume(settings_.hpVolume());
           break;
-        case 3:
+        case 4:
           settings_.adjustBrightness(-15);
           ui_.setBrightness(settings_.brightness());
           M5Cardputer.Display.setBrightness(settings_.brightness());
           break;
-        case 4:
+        case 5:
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
           break;
-        case 5:
+        case 6:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
           break;
-        default:
-          break;
+        default: break;
       }
       break;
     case Action::Enter:
     case Action::Space:
       switch (settings_.cursor()) {
-        case 0:
-          settings_.cycleTheme(+1);
+        case 0: settings_.cycleTheme(+1); break;
+        case 1:
+          settings_.toggleRoute();
+          player_.setRoute(settings_.route());
           break;
-        case 4:
-          settings_.cycleDisplayTimeout();
-          break;
-        case 5:
+        case 5: settings_.cycleDisplayTimeout(); break;
+        case 6:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
           break;
-        default:
-          break;
+        default: break;
       }
+      break;
+    case Action::ToggleOutput:
+      settings_.toggleRoute();
+      player_.setRoute(settings_.route());
       break;
     case Action::Back:
     case Action::Settings:

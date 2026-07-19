@@ -53,6 +53,9 @@ Action Input::poll(Screen screen) {
       case 's':
       case 'S':
         return Action::Settings;
+      case 'h':
+      case 'H':
+        return Action::ToggleOutput;
       // Optional extras still work
       case '=':
       case '+':

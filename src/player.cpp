@@ -215,7 +215,7 @@ int Player::speakerVolume() const { return speakerVol_; }
 int Player::hpVolume() const { return hpVol_; }
 
 void Player::setVolumePercent(int p) {
-  if (out_ && out_->headphonesInserted()) {
+  if (out_ && out_->route() == OutputRoute::Headphone) {
     setHpVolume(p);
   } else {
     setSpeakerVolume(p);
@@ -223,11 +223,23 @@ void Player::setVolumePercent(int p) {
 }
 
 void Player::adjustVolume(int deltaPercent) {
-  if (out_ && out_->headphonesInserted()) {
+  if (out_ && out_->route() == OutputRoute::Headphone) {
     adjustHpVolume(deltaPercent);
   } else {
     adjustSpeakerVolume(deltaPercent);
   }
+}
+
+void Player::setRoute(OutputRoute r) {
+  if (out_) out_->setRoute(r);
+}
+
+OutputRoute Player::route() const {
+  return out_ ? out_->route() : OutputRoute::Speaker;
+}
+
+void Player::toggleRoute() {
+  if (out_) out_->toggleRoute();
 }
 
 void Player::service() {
@@ -255,8 +267,9 @@ PlayerSnapshot Player::snapshot() const {
   s.state = state_;
   std::strncpy(s.fileName, currentName_, cfg::kMaxNameLen - 1);
   s.fileName[cfg::kMaxNameLen - 1] = '\0';
-  s.volumePercent = (out_ && out_->headphonesInserted()) ? hpVol_ : speakerVol_;
-  s.hpMode = out_ && out_->headphonesInserted();
+  const bool hp = out_ && out_->route() == OutputRoute::Headphone;
+  s.volumePercent = hp ? hpVol_ : speakerVol_;
+  s.route = hp ? OutputRoute::Headphone : OutputRoute::Speaker;
   if (decoder_) {
     s.positionMs = decoder_->positionMs();
     AudioFormat fmt = decoder_->format();

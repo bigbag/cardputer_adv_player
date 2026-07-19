@@ -1,5 +1,6 @@
 #pragma once
 
+#include "types.hpp"
 #include <cstddef>
 #include <cstdint>
 
@@ -9,19 +10,21 @@ class AudioOut {
   void end();
   bool setSampleRate(uint32_t hz);
 
-  // Volume for the currently active route (speaker or HP).
+  // Active route volume (depends on setRoute).
   void setVolumePercent(int percent);
   int volumePercent() const;
 
-  // Per-route volumes (persisted by Settings/App).
   void setSpeakerVolume(int percent);
   void setHpVolume(int percent);
   int speakerVolume() const { return speakerVol_; }
   int hpVolume() const { return hpVol_; }
 
+  // Software output profile — jack mute is hardware; we only switch gain.
+  void setRoute(OutputRoute r);
+  OutputRoute route() const { return route_; }
+  void toggleRoute();
+
   size_t write(const int16_t* stereoFrames, size_t frames);
-  void updateAmpFromHp();
-  bool headphonesInserted() const;
   bool playTestBeep(uint32_t freqHz, uint32_t ms);
 
  private:
@@ -32,12 +35,14 @@ class AudioOut {
   void applyVolume();
   int effectiveVolumePercent() const;
   static uint8_t esDacRegFromPercent(int percent);
-  int activeVolume() const { return hpInserted_ ? hpVol_ : speakerVol_; }
+  int activeVolume() const {
+    return route_ == OutputRoute::Headphone ? hpVol_ : speakerVol_;
+  }
 
   uint32_t rate_ = 0;
   int speakerVol_ = 70;
   int hpVol_ = 40;
+  OutputRoute route_ = OutputRoute::Speaker;
   bool ready_ = false;
-  bool hpInserted_ = false;
-  int softScale_ = 100;  // 0..100 amplitude after curve
+  int softScale_ = 100;  // 0..100 amplitude after vol^2 curve
 };
