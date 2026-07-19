@@ -41,6 +41,7 @@ class Player {
 #endif
   bool openDecoder(const char* path);
   void closeDecoder();
+  bool adjacentTrack(bool next, char* outPath, size_t outCap);
   bool enqueueAutoNext();
   uint32_t positionMs() const;
 

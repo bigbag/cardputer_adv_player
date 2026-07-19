@@ -224,10 +224,21 @@ uint32_t Player::positionMs() const {
   return decoder_ ? decoder_->positionMs() : 0;
 }
 
+bool Player::adjacentTrack(bool next, char* outPath, size_t outCap) {
+  if (!browser_ || currentPath_[0] != '/' || !outPath || outCap == 0) return false;
+  const BrowserLocation visibleLocation = browser_->location();
+  bool found = false;
+  if (browser_->revealPath(currentPath_)) {
+    found = next ? browser_->nextAudioAfter(currentName_, outPath, outCap)
+                 : browser_->prevAudioBefore(currentName_, outPath, outCap);
+  }
+  browser_->restoreLocation(visibleLocation);
+  return found;
+}
+
 bool Player::nextTrack() {
-  if (!browser_) return false;
   char nextPath[cfg::kMaxPathLen];
-  if (browser_->nextAudioAfter(currentName_, nextPath, sizeof(nextPath))) {
+  if (adjacentTrack(true, nextPath, sizeof(nextPath))) {
     return open(nextPath);
   }
   return false;
@@ -241,9 +252,8 @@ bool Player::prevTrack() {
     }
     return false;
   }
-  if (!browser_) return false;
   char prevPath[cfg::kMaxPathLen];
-  if (browser_->prevAudioBefore(currentName_, prevPath, sizeof(prevPath))) {
+  if (adjacentTrack(false, prevPath, sizeof(prevPath))) {
     return open(prevPath);
   }
   // Already first track: restart it.
