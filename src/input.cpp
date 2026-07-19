@@ -4,8 +4,6 @@
 void Input::begin() {}
 
 Action Input::poll(Screen screen) {
-  (void)screen;  // layout is global; no per-screen key conflicts now
-
   // M5Cardputer.update() must have been called (App::loop does this).
   if (!M5Cardputer.Keyboard.isChange() || !M5Cardputer.Keyboard.isPressed()) {
     return Action::None;
@@ -28,15 +26,16 @@ Action Input::poll(Screen screen) {
   }
 
   // Cardputer diamond cluster (physical):
-  //        ;
+  //        ;          Browse: Up/Down     Playing: Prev/Next track
   //     ,  .  /
-  //   left down right   (up = ;)
+  //   left down right   (, / = volume)
+  const bool playing = (screen == Screen::Playing);
   for (char key : st.word) {
     switch (key) {
       case ';':
-        return Action::Up;
+        return playing ? Action::PrevTrack : Action::Up;
       case '.':
-        return Action::Down;
+        return playing ? Action::NextTrack : Action::Down;
       case ',':
         return Action::VolDown;   // left  = decrease
       case '/':
@@ -60,6 +59,14 @@ Action Input::poll(Screen screen) {
       case '-':
       case '_':
         return Action::VolDown;
+      case 'n':
+      case 'N':
+        if (playing) return Action::NextTrack;
+        break;
+      case 'p':
+      case 'P':
+        if (playing) return Action::PrevTrack;
+        break;
       default:
         break;
     }

@@ -199,6 +199,14 @@ void App::handlePlaying(Action a) {
     case Action::SeekBack:
       player_.seekRelative(-cfg::kSeekStepSeconds);
       break;
+    case Action::NextTrack:
+      if (!player_.nextTrack()) {
+        ui_.showToast("Last track", millis());
+      }
+      break;
+    case Action::PrevTrack:
+      player_.prevTrack();
+      break;
     case Action::Back:
       screen_ = Screen::Browse;
       break;

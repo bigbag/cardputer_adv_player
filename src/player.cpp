@@ -217,10 +217,38 @@ void Player::service() {
 }
 
 bool Player::enqueueAutoNext() {
+  return nextTrack();
+}
+
+uint32_t Player::positionMs() const {
+  return decoder_ ? decoder_->positionMs() : 0;
+}
+
+bool Player::nextTrack() {
   if (!browser_) return false;
   char nextPath[cfg::kMaxPathLen];
   if (browser_->nextAudioAfter(currentName_, nextPath, sizeof(nextPath))) {
     return open(nextPath);
+  }
+  return false;
+}
+
+bool Player::prevTrack() {
+  // Phone-style: deep into track → restart; near start → previous file.
+  if (positionMs() > cfg::kPrevRestartMs) {
+    if (currentPath_[0] != '\0') {
+      return open(currentPath_);
+    }
+    return false;
+  }
+  if (!browser_) return false;
+  char prevPath[cfg::kMaxPathLen];
+  if (browser_->prevAudioBefore(currentName_, prevPath, sizeof(prevPath))) {
+    return open(prevPath);
+  }
+  // Already first track: restart it.
+  if (currentPath_[0] != '\0') {
+    return open(currentPath_);
   }
   return false;
 }

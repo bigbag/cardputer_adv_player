@@ -274,6 +274,26 @@ bool SdBrowser::nextAudioAfter(const char* fileName, char* outPath, size_t outCa
   return false;
 }
 
+bool SdBrowser::prevAudioBefore(const char* fileName, char* outPath, size_t outCap) {
+  if (!fileName || !outPath || outCap == 0 || count_ == 0) return false;
+
+  size_t startIdx = count_;
+  for (size_t i = 0; i < count_; ++i) {
+    if (std::strcmp(entries_[i].name, fileName) == 0) {
+      startIdx = i;
+      break;
+    }
+  }
+  if (startIdx == 0 || startIdx >= count_) return false;
+
+  for (size_t i = startIdx; i-- > 0;) {
+    if (entries_[i].kind == EntryKind::Mp3 || entries_[i].kind == EntryKind::Wav) {
+      return path::join(outPath, outCap, path_, entries_[i].name);
+    }
+  }
+  return false;
+}
+
 BrowseSnapshot SdBrowser::snapshot() const {
   BrowseSnapshot s{};
   std::strncpy(s.path, path_, cfg::kMaxPathLen - 1);

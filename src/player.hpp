@@ -24,6 +24,8 @@ class Player {
   void adjustVolume(int deltaPercent);
   int volumePercent() const { return volume_; }
   void seekRelative(int deltaSeconds);
+  bool nextTrack();  // next audio in current folder; false at end
+  bool prevTrack();  // restart if >kPrevRestartMs, else previous track
   void service();
   void setAutoNext(bool on) { autoNextEnabled_ = on; }
   bool autoNext() const { return autoNextEnabled_; }
@@ -39,6 +41,7 @@ class Player {
   bool openDecoder(const char* path);
   void closeDecoder();
   bool enqueueAutoNext();
+  uint32_t positionMs() const;
 
   AudioOut* out_ = nullptr;
   SdBrowser* browser_ = nullptr;

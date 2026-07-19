@@ -19,6 +19,7 @@ class SdBrowser {
   void moveCursor(int delta);
   size_t scroll() const;
   bool nextAudioAfter(const char* fileName, char* outPath, size_t outCap);
+  bool prevAudioBefore(const char* fileName, char* outPath, size_t outCap);
   BrowseSnapshot snapshot() const;
 
  private:

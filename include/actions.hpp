@@ -12,6 +12,8 @@ enum class Action : uint8_t {
   VolDown,
   SeekFwd,
   SeekBack,
+  NextTrack,  // play mode: next audio in folder
+  PrevTrack,  // play mode: prev / restart current
   RetrySd,
   Settings,  // open settings (Tab or 's')
 };

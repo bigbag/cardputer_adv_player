@@ -44,6 +44,8 @@ constexpr size_t kMaxNameLen = 64;
 // Finer steps so the expanded quiet zone is usable (HP lives in low UI).
 constexpr int kVolumeStepPercent = 2;
 constexpr int kSeekStepSeconds = 5;
+// Prev within this window jumps to previous track; after it, restarts current.
+constexpr uint32_t kPrevRestartMs = 3000;
 // Default in the quiet/mid band (headphones-friendly).
 constexpr int kDefaultVolumePercent = 30;
 constexpr uint32_t kToastMs = 1500;

@@ -382,7 +382,7 @@ void Ui::drawPlaying(const PlayerSnapshot& p, bool full) {
     d.drawString(volBuf, 4, 74);
   }
 
-  drawHint("Spc pause  ,/ vol  S set");
+  drawHint(";. trk  ,/ vol  [] seek");
 }
 
 void Ui::drawSettings(const Settings& s) {
