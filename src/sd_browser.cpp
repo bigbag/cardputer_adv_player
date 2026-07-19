@@ -29,6 +29,10 @@ static bool isAudioName(const char* name) {
   return path::hasExtInsensitive(name, ".mp3") || path::hasExtInsensitive(name, ".wav");
 }
 
+static bool isAbsolutePath(const char* path) {
+  return path && path[0] == '/';
+}
+
 // Build VFS absolute path: "/sd" + path_  (path_ always starts with '/').
 static bool makeVfsPath(char* out, size_t cap, const char* relPath) {
   if (!out || cap < 4 || !relPath) return false;
@@ -312,6 +316,43 @@ bool SdBrowser::prevAudioBefore(const char* fileName, char* outPath, size_t outC
     }
   }
   return false;
+}
+
+BrowserLocation SdBrowser::location() const {
+  BrowserLocation out{};
+  std::strncpy(out.path, path_, sizeof(out.path) - 1);
+  if (count_ > 0 && cursor_ < count_) {
+    std::strncpy(out.item, entries_[cursor_].name, sizeof(out.item) - 1);
+  }
+  return out;
+}
+
+bool SdBrowser::restoreLocation(const BrowserLocation& location) {
+  auto restoreRoot = [&]() {
+    openPath("/");
+    return false;
+  };
+
+  // Empty path is the legacy/no-location default and validly restores root.
+  if (location.path[0] == '\0') {
+    return openPath("/");
+  }
+  if (!isAbsolutePath(location.path) || !openPath(location.path)) {
+    return restoreRoot();
+  }
+
+  // An empty selection is valid only for an empty folder. For nonempty folders,
+  // it means the saved selected item is missing and must reset to root.
+  if (location.item[0] == '\0') {
+    return count_ == 0 ? true : restoreRoot();
+  }
+  for (size_t i = 0; i < count_; ++i) {
+    if (std::strcmp(entries_[i].name, location.item) == 0) {
+      setCursor(i);
+      return true;
+    }
+  }
+  return restoreRoot();
 }
 
 BrowseSnapshot SdBrowser::snapshot() const {

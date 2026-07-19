@@ -22,6 +22,10 @@ class SdBrowser {
   bool prevAudioBefore(const char* fileName, char* outPath, size_t outCap);
   // List parent of absPath and put cursor on the file. false if missing.
   bool revealPath(const char* absPath);
+  // Current folder + selected visible entry (not cursor index / scroll).
+  BrowserLocation location() const;
+  // Restore folder and selected entry. Missing folder/item resets to root.
+  bool restoreLocation(const BrowserLocation& location);
   BrowseSnapshot snapshot() const;
 
  private:
