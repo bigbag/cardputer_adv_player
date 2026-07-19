@@ -110,9 +110,10 @@ reliable software amp-enable for this product path:
 ### 2.1 Modules
 
 - **`App`** (`src/app.cpp`) — screen state machine (Browse / Playing / Settings);
-  applies settings; remembers `last_path`; calls `Player` controls.
+  applies settings; persists `last_path` and Browser location; calls `Player` controls.
 - **`Player`** (`src/player.cpp`) — open/stop/pause/seek/next/prev; FreeRTOS
-  decode task; auto-next handoff via `service()` on the loop task.
+  decode task; auto-next handoff via `service()` on the loop task. Adjacent-track
+  lookups temporarily use `currentPath()`'s parent, then restore visible Browser state.
 - **`IDecoder`** (`src/decoders/decoder.hpp`) — common interface:
   `open` / `decode` / `seekMs` / `positionMs` / `format`.
 - **`Mp3Decoder`** — vendored **minimp3**; SD stream → PCM.
@@ -121,7 +122,8 @@ reliable software amp-enable for this product path:
   volume multiply, optional test beep.
 - **`SdBrowser`** — FAT listing (`readdir`), folder navigation, next/prev audio
   siblings for playlist-style skip.
-- **`Settings`** — `/.asvmp3/config.cfg` on SD (volume, theme, last path, …).
+- **`Settings`** — `/.asvmp3/config.cfg` on SD: volume/theme/etc., `last_path`,
+  `browser_path`, `browser_item`, and `on_boot`.
 
 ---
 
@@ -256,12 +258,16 @@ Why decode is not on the UI task:
 
 ## 8. Track navigation (audio-adjacent)
 
-- **Auto-next** — on decode `Finished`, next `.mp3`/`.wav` in the **same folder**
-  (sorted listing; dirs first in UI but skipped for next/prev audio).
-- **Next** (`.` / `N`) — `SdBrowser::nextAudioAfter`
-- **Prev** (`;` / `P`) — if position > 3 s restart current; else previous file
-- **Last path** — `Settings::lastPath` in `/.asvmp3/config.cfg`; on boot
-  `SdBrowser::revealPath` + auto `Player::open`
+- **Auto-next** — on decode `Finished`, next `.mp3`/`.wav` in the playing
+  track's folder (sorted listing; dirs first in UI but skipped for next/prev audio).
+- **Next** (`.` / `N`) — resolve `currentPath()`'s parent with
+  `SdBrowser::nextAudioAfter`, then restore the visible Browser location.
+- **Prev** (`;`) — if position > 3 s restart current; otherwise resolve the prior
+  sibling in `currentPath()`'s parent and restore visible Browser location.
+- **Browser location** — `browser_path` + `browser_item` restore first and are
+  independent of playback. A missing folder or selected item falls back to root `/`.
+- **Last path / boot** — `on_boot=play` opens `last_path` without replacing Browser
+  state; `browse` and `off` leave the restored Browser visible and do not autoplay.
 
 ---
 
@@ -272,7 +278,7 @@ Why decode is not on the UI task:
 - `src/player.cpp` — task lifecycle, decode loop, next/prev
 - `src/decoders/*` — MP3/WAV
 - `src/sd_browser.cpp` — SD mount + listing + siblings
-- `src/settings.cpp` — persistent volume / last path
+- `src/settings.cpp` — persistent settings, last path, and Browser location
 - `src/app.cpp` — wires UI controls to player/settings
 
 ---
