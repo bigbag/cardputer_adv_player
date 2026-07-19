@@ -5,6 +5,7 @@
 enum class Screen : uint8_t { Browse, Playing, Settings };
 enum class EntryKind : uint8_t { Dir, Mp3, Wav };
 enum class PlayState : uint8_t { Idle, Playing, Paused, Done, Error };
+enum class OnBootMode : uint8_t { Play, Browse, Off };
 
 struct DirEntry {
   char name[cfg::kMaxNameLen];
@@ -40,6 +41,7 @@ struct SettingsSnapshot {
   uint8_t brightness;
   uint32_t displayTimeoutMs;  // 0 = never
   bool autoNext;
+  OnBootMode onBoot;
   size_t themeIndex;
   size_t cursor;
 };
