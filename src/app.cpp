@@ -81,12 +81,22 @@ void App::rememberLastPath(const char* absPath) {
 
 void App::resumeLastTrack() {
   if (!browser_.sdOk()) return;
+  if (settings_.onBoot() == OnBootMode::Off) {
+    Serial.println("[app] on_boot=off — skip last track");
+    return;
+  }
+
   const char* last = settings_.lastPath();
   if (!last || last[0] != '/') return;
 
   if (!browser_.revealPath(last)) {
     Serial.printf("[app] last track missing: %s\n", last);
     return;
+  }
+
+  if (settings_.onBoot() == OnBootMode::Browse) {
+    Serial.printf("[app] on_boot=browse — revealed %s\n", last);
+    return;  // stay Screen::Browse
   }
 
   Serial.printf("[app] resume last: %s\n", last);
@@ -281,6 +291,10 @@ void App::handleSettings(Action a) {
           player_.setAutoNext(settings_.autoNext());
           changed = true;
           break;
+        case 5:
+          settings_.cycleOnBoot(+1);
+          changed = true;
+          break;
         default: break;
       }
       break;
@@ -312,6 +326,10 @@ void App::handleSettings(Action a) {
           player_.setAutoNext(settings_.autoNext());
           changed = true;
           break;
+        case 5:
+          settings_.cycleOnBoot(-1);
+          changed = true;
+          break;
         default: break;
       }
       break;
@@ -323,6 +341,10 @@ void App::handleSettings(Action a) {
         case 4:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
+          changed = true;
+          break;
+        case 5:
+          settings_.cycleOnBoot(+1);
           changed = true;
           break;
         default: break;
