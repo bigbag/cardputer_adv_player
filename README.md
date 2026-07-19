@@ -148,7 +148,11 @@ Jack mutes the speaker in **hardware**. There is **one Volume** with a wide rang
 
 Settings (including last played path and on-boot mode) auto-save to `/.asvmp3/config.cfg` on change.
 On boot, behavior follows **On boot**: **play** restores and starts the last track if it still exists;
-**browse** only opens its folder and highlights it; **off** ignores the saved path.
+**browse** restores Browser without playback; **off** ignores the saved path.
+
+The Browser also remembers its last folder and highlighted entry independently of the
+last played track. This location is restored after reboot and when returning from Now
+Playing. If its folder or highlighted item no longer exists, Browser safely opens root `/`.
 
 Starting another file from Browse replaces the current track. When a track ends, the
 next audio file in the **same folder** auto-plays; if none remain, status shows `DONE`.
@@ -178,8 +182,13 @@ next audio file in the **same folder** auto-plays; if none remain, status shows 
 8. Backspace or **P** toggles Browse ↔ Playing while audio continues; open new file switches track
 9. Headphone jack mutes speaker amp
 10. Settings survive reboot (`/.asvmp3/config.cfg`)
-11. Last track on boot follows **On boot** (play / browse / off)
-12. Serial 115200 shows mount/open/errors
+11. Nested Browser folder and highlighted entry survive reboot
+12. **On boot = play** starts last track; Back / **P** returns to saved Browser location
+13. **On boot = browse** and **off** restore Browser without playback
+14. Browsing elsewhere does not change the player next/prev/auto-next folder
+15. Removed Browser folder or item restores root `/`
+16. Missing Browser config keys restore root `/`
+17. Serial 115200 shows mount/open/errors
 
 **Hardware validation status:** host tests and firmware build pass; full on-device
 checklist not yet signed off in this environment.
