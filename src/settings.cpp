@@ -30,8 +30,9 @@ void Settings::load() {
 
   if (volumePercent_ < 0) volumePercent_ = 0;
   if (volumePercent_ > 100) volumePercent_ = 100;
-  // Lift volumes saved under the old too-quiet curve.
-  if (volumePercent_ > 0 && volumePercent_ < 25) volumePercent_ = 75;
+  // Clamp absurd NVS values from earlier gain experiments.
+  if (volumePercent_ < 0) volumePercent_ = 0;
+  if (volumePercent_ > 100) volumePercent_ = 100;
   if (themeIndex_ >= themes::kCount) themeIndex_ = 0;
 #endif
 }

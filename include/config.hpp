@@ -46,8 +46,8 @@ constexpr size_t kMaxPathLen = 256;
 constexpr size_t kMaxNameLen = 64;
 constexpr int kVolumeStepPercent = 5;
 constexpr int kSeekStepSeconds = 5;
-// UI default volume (also used if NVS missing).
-constexpr int kDefaultVolumePercent = 75;
+// UI default (M5-style squared curve → ~49% amplitude at 70).
+constexpr int kDefaultVolumePercent = 70;
 constexpr uint32_t kToastMs = 1500;
 
 // Audio task / buffers
