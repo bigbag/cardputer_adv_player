@@ -24,7 +24,10 @@ class App {
   void applySettings();
   void persistSettings();  // apply + write SD immediately
   void rememberLastPath(const char* absPath);  // cfg last_path + save
-  void resumeLastTrack();  // after boot: reveal + play if present
+  void rememberBrowserLocation();
+  void flushBrowserLocation(bool showError);
+  void restoreBrowserLocation();
+  void resumeLastTrack();  // after boot: play if configured and present
   void playSelection();
   void noteActivity(uint32_t nowMs);
   void updateDisplayPower(uint32_t nowMs);
@@ -38,4 +41,6 @@ class App {
   Screen screen_ = Screen::Browse;
   Screen settingsReturn_ = Screen::Browse;
   uint32_t lastActivityMs_ = 0;
+  bool browserLocationDirty_ = false;
+  uint32_t browserLocationChangedAtMs_ = 0;
 };

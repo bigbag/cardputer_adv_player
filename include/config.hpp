@@ -49,6 +49,7 @@ constexpr uint32_t kPrevRestartMs = 3000;
 // Default in the quiet/mid band (headphones-friendly).
 constexpr int kDefaultVolumePercent = 30;
 constexpr uint32_t kToastMs = 1500;
+constexpr uint32_t kBrowserLocationSaveDelayMs = 750;
 
 // Single wide volume: soft% = (UI/100)^exp * 100, then PCM × boost.
 // Cubic keeps a large quiet zone for the hot 3.5mm jack; top still reaches

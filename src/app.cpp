@@ -37,7 +37,8 @@ void App::begin() {
     settings_.save();
   }
 
-  // Restore last played track (folder cursor + auto-play if file still exists).
+  // Browser location is independent of the last played track.
+  restoreBrowserLocation();
   resumeLastTrack();
 
   lastActivityMs_ = millis();
@@ -66,7 +67,9 @@ void App::closeSettings() {
 
 void App::persistSettings() {
   applySettings();
-  if (!settings_.save()) {
+  if (settings_.save()) {
+    browserLocationDirty_ = false;
+  } else {
     ui_.showToast("Save fail (SD?)", millis());
   }
 }
@@ -76,27 +79,41 @@ void App::rememberLastPath(const char* absPath) {
   const char* prev = settings_.lastPath();
   if (prev && std::strcmp(prev, absPath) == 0) return;
   settings_.setLastPath(absPath);
-  settings_.save();  // silent; volume path already handles toast on fail
+  if (settings_.save()) {
+    browserLocationDirty_ = false;
+  }
+}
+
+void App::rememberBrowserLocation() {
+  settings_.setBrowserLocation(browser_.location());
+  browserLocationDirty_ = true;
+  browserLocationChangedAtMs_ = millis();
+}
+
+void App::flushBrowserLocation(bool showError) {
+  if (!browserLocationDirty_) return;
+  if (settings_.save()) {
+    browserLocationDirty_ = false;
+  } else if (showError) {
+    ui_.showToast("Save fail (SD?)", millis());
+  }
+}
+
+void App::restoreBrowserLocation() {
+  if (!browser_.restoreLocation(settings_.browserLocation())) {
+    Serial.println("[app] browser location unavailable — root");
+  }
 }
 
 void App::resumeLastTrack() {
-  if (!browser_.sdOk()) return;
-  if (settings_.onBoot() == OnBootMode::Off) {
-    Serial.println("[app] on_boot=off — skip last track");
-    return;
-  }
+  if (!browser_.sdOk() || settings_.onBoot() != OnBootMode::Play) return;
 
   const char* last = settings_.lastPath();
-  if (!last || last[0] != '/') return;
-
-  if (!browser_.revealPath(last)) {
-    Serial.printf("[app] last track missing: %s\n", last);
+  if (!last || last[0] != '/' || !SD.exists(last)) {
+    if (last && last[0] == '/') {
+      Serial.printf("[app] last track missing: %s\n", last);
+    }
     return;
-  }
-
-  if (settings_.onBoot() == OnBootMode::Browse) {
-    Serial.printf("[app] on_boot=browse — revealed %s\n", last);
-    return;  // stay Screen::Browse
   }
 
   Serial.printf("[app] resume last: %s\n", last);
@@ -128,11 +145,10 @@ void App::loop() {
   const uint32_t now = millis();
   M5Cardputer.update();
   player_.service();
-  // Auto-next (and any other path change) → persist last track.
-  if (screen_ == Screen::Playing) {
-    const char* p = player_.currentPath();
-    if (p && p[0] == '/') rememberLastPath(p);
-  }
+  // Auto-next (and any other path change) → persist last track, even while
+  // Browser is visible after the user leaves the Playing screen.
+  const char* currentPath = player_.currentPath();
+  if (currentPath && currentPath[0] == '/') rememberLastPath(currentPath);
 
   Action a = input_.poll(screen_);
   bool forceUi = false;
@@ -152,6 +168,11 @@ void App::loop() {
     forceUi = true;
   }
 
+  if (browserLocationDirty_ &&
+      now - browserLocationChangedAtMs_ >= cfg::kBrowserLocationSaveDelayMs) {
+    flushBrowserLocation(false);
+  }
+
   ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, now, forceUi);
   updateDisplayPower(now);
 
@@ -161,6 +182,10 @@ void App::loop() {
 void App::handle(Action a) {
   // Global: Settings key from Browse/Playing
   if (a == Action::Settings && screen_ != Screen::Settings) {
+    if (screen_ == Screen::Browse) {
+      rememberBrowserLocation();
+      flushBrowserLocation(true);
+    }
     openSettings();
     return;
   }
@@ -172,6 +197,8 @@ void App::handle(Action a) {
     if (screen_ == Screen::Playing) {
       screen_ = Screen::Browse;
     } else if (hasTrack) {
+      rememberBrowserLocation();
+      flushBrowserLocation(true);
       screen_ = Screen::Playing;
     } else {
       ui_.showToast("Nothing playing", millis());
@@ -206,6 +233,7 @@ void App::handleBrowse(Action a) {
         if (browser_.remount()) {
           settings_.load();
           applySettings();
+          restoreBrowserLocation();
         }
         break;
       }
@@ -231,6 +259,14 @@ void App::handleBrowse(Action a) {
       break;
     default:
       break;
+  }
+
+  // A successful file selection switches to Playing and has already captured
+  // its Browser location in playSelection().
+  if (screen_ == Screen::Browse &&
+      (a == Action::Up || a == Action::Down || a == Action::Enter ||
+       a == Action::Space || a == Action::Back)) {
+    rememberBrowserLocation();
   }
 }
 
@@ -380,6 +416,7 @@ void App::playSelection() {
   char absPath[cfg::kMaxPathLen];
   const DirEntry& e = browser_.entries()[browser_.cursor()];
   if (!path::join(absPath, sizeof(absPath), browser_.path(), e.name)) return;
+  rememberBrowserLocation();
   Serial.printf("[app] play %s\n", absPath);
   if (player_.open(absPath)) {
     rememberLastPath(absPath);
