@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.hpp"
+#include "theme.hpp"
 #include <cstdint>
 
 // Persistent app settings (NVS when available).
@@ -19,19 +20,22 @@ class Settings {
   void adjustBrightness(int delta);
 
   uint32_t displayTimeoutMs() const { return displayTimeoutMs_; }
-  // Cycle: 5s → 10s → 30s → 60s → never(0) → 5s …
   void cycleDisplayTimeout();
 
   bool autoNext() const { return autoNext_; }
   void setAutoNext(bool on);
   void toggleAutoNext();
 
-  // Setting rows for UI (0..kSettingCount-1)
-  static constexpr size_t kCount = 4;
+  size_t themeIndex() const { return themeIndex_; }
+  void setThemeIndex(size_t i);
+  void cycleTheme(int delta);
+  const Theme& theme() const { return themes::get(themeIndex_); }
+
+  // Setting rows: Volume, Brightness, Scr timeout, Auto-next, Theme
+  static constexpr size_t kCount = 5;
   size_t cursor() const { return cursor_; }
   void moveCursor(int delta);
 
-  // Human labels for current values
   void formatValue(size_t index, char* buf, size_t cap) const;
   const char* label(size_t index) const;
 
@@ -40,5 +44,6 @@ class Settings {
   uint8_t brightness_ = 128;
   uint32_t displayTimeoutMs_ = 10000;
   bool autoNext_ = true;
+  size_t themeIndex_ = 0;
   size_t cursor_ = 0;
 };

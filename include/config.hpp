@@ -32,12 +32,7 @@ constexpr int kSdMiso = 39;
 // Start conservative; many microSD cards fail mount at 15–25 MHz on this bus.
 constexpr uint32_t kSdSpiHz = 4000000;
 
-// UI
-constexpr uint16_t kColorBg = 0x0000;      // black
-constexpr uint16_t kColorFg = 0x07E0;      // green
-constexpr uint16_t kColorDim = 0x03E0;     // dim green
-constexpr uint16_t kColorSelectBg = 0x07E0;
-constexpr uint16_t kColorSelectFg = 0x0000;
+// UI layout (colors live in theme.hpp / Settings)
 constexpr int kHintBarH = 12;
 constexpr int kListRowH = 14;
 constexpr int kMaxVisibleRows = 7;

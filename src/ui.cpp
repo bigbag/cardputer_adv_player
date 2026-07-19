@@ -5,16 +5,21 @@
 #include <cstring>
 
 void Ui::begin() {
+  applyTheme(themes::get(0));
   auto& d = M5Cardputer.Display;
   d.setRotation(1);
   d.setBrightness(cfg::kDisplayBrightness);
-  d.fillScreen(cfg::kColorBg);
+  d.fillScreen(theme_.bg);
   d.setTextSize(1);
   hasLastBrowse_ = false;
   hasLastPlayer_ = false;
   hasLastSettings_ = false;
   displayOn_ = true;
   lastHint_[0] = '\0';
+}
+
+void Ui::applyTheme(const Theme& t) {
+  theme_ = t;
 }
 
 void Ui::setBrightness(uint8_t b) {
@@ -82,6 +87,7 @@ bool Ui::settingsChanged(const Settings& s) const {
          cur.brightness != lastSettings_.brightness ||
          cur.displayTimeoutMs != lastSettings_.displayTimeoutMs ||
          cur.autoNext != lastSettings_.autoNext ||
+         cur.themeIndex != lastSettings_.themeIndex ||
          cur.cursor != lastSettings_.cursor;
 }
 
@@ -125,6 +131,17 @@ bool Ui::render(Screen screen,
     return false;
   }
 
+  // Live theme from settings (changes apply immediately in Settings screen).
+  bool themeChanged = false;
+  if (theme_.name != settings.theme().name) {
+    applyTheme(settings.theme());
+    themeChanged = true;
+    hasLastBrowse_ = false;
+    hasLastPlayer_ = false;
+    hasLastSettings_ = false;
+    lastHint_[0] = '\0';
+  }
+
   const bool toastAppeared = (toast_.expiresAtMs != 0 && toast_.expiresAtMs != lastToastExp_);
   const bool toastExpired =
       (lastToastExp_ != 0 && (toast_.expiresAtMs == 0 || nowMs >= toast_.expiresAtMs));
@@ -134,7 +151,7 @@ bool Ui::render(Screen screen,
   }
 
   const bool screenSwitch = (screen != lastScreen_);
-  bool dirty = force || screenSwitch || toastAppeared || toastExpired;
+  bool dirty = force || themeChanged || screenSwitch || toastAppeared || toastExpired;
   bool progressOnly = false;
 
   if (!dirty) {
@@ -157,8 +174,8 @@ bool Ui::render(Screen screen,
 
   auto& d = M5Cardputer.Display;
 
-  if (screenSwitch) {
-    d.fillScreen(cfg::kColorBg);
+  if (screenSwitch || themeChanged) {
+    d.fillScreen(theme_.bg);
     hasLastBrowse_ = false;
     hasLastPlayer_ = false;
     hasLastSettings_ = false;
@@ -195,10 +212,10 @@ void Ui::drawBrowse(const BrowseSnapshot& b, bool full) {
 
   if (!b.sdOk) {
     if (full || lastSdOk_) {
-      d.fillRect(0, 0, cfg::kScreenW, cfg::kScreenH - cfg::kHintBarH, cfg::kColorBg);
-      d.setTextColor(cfg::kColorFg, cfg::kColorBg);
+      d.fillRect(0, 0, cfg::kScreenW, cfg::kScreenH - cfg::kHintBarH, theme_.bg);
+      d.setTextColor(theme_.fg, theme_.bg);
       d.drawString("No SD card", 4, cfg::kScreenH / 2 - 10);
-      d.setTextColor(cfg::kColorDim, cfg::kColorBg);
+      d.setTextColor(theme_.dim, theme_.bg);
       d.drawString("FAT32 only (not exFAT)", 4, cfg::kScreenH / 2 + 6);
     }
     drawHint("Ent retry  S set");
@@ -206,8 +223,8 @@ void Ui::drawBrowse(const BrowseSnapshot& b, bool full) {
   }
 
   if (full || std::strcmp(b.path, lastPath_) != 0 || !lastSdOk_) {
-    d.fillRect(0, 0, cfg::kScreenW, 11, cfg::kColorBg);
-    d.setTextColor(cfg::kColorDim, cfg::kColorBg);
+    d.fillRect(0, 0, cfg::kScreenW, 11, theme_.bg);
+    d.setTextColor(theme_.dim, theme_.bg);
     char pathBuf[cfg::kMaxPathLen + 4];
     snprintf(pathBuf, sizeof(pathBuf), "SD:%s", b.path);
     if (strlen(pathBuf) > 38) {
@@ -261,8 +278,8 @@ void Ui::drawBrowse(const BrowseSnapshot& b, bool full) {
 
     if (rowVisible && b.entries) {
       const bool selected = (idx == b.cursor);
-      const uint16_t bg = selected ? cfg::kColorSelectBg : cfg::kColorBg;
-      const uint16_t fg = selected ? cfg::kColorSelectFg : cfg::kColorFg;
+      const uint16_t bg = selected ? theme_.selectBg : theme_.bg;
+      const uint16_t fg = selected ? theme_.selectFg : theme_.fg;
       d.fillRect(0, y, cfg::kScreenW, cfg::kListRowH, bg);
       d.setTextColor(fg, bg);
       char rowBuf[cfg::kMaxNameLen + 2];
@@ -273,18 +290,18 @@ void Ui::drawBrowse(const BrowseSnapshot& b, bool full) {
       }
       d.drawString(rowBuf, 4, y + 2);
     } else {
-      d.fillRect(0, y, cfg::kScreenW, cfg::kListRowH, cfg::kColorBg);
+      d.fillRect(0, y, cfg::kScreenW, cfg::kListRowH, theme_.bg);
     }
   }
 
   if (b.count == 0 && (full || lastCount_ != 0)) {
-    d.setTextColor(cfg::kColorDim, cfg::kColorBg);
+    d.setTextColor(theme_.dim, theme_.bg);
     d.drawString("(empty)", 4, listY + 2);
   }
 
   if (b.truncated) {
     const int truncY = cfg::kScreenH - cfg::kHintBarH - 10;
-    d.setTextColor(cfg::kColorDim, cfg::kColorBg);
+    d.setTextColor(theme_.dim, theme_.bg);
     d.drawString("* truncated", 2, truncY);
   }
 
@@ -294,8 +311,8 @@ void Ui::drawBrowse(const BrowseSnapshot& b, bool full) {
 void Ui::drawPlayingProgress(const PlayerSnapshot& p) {
   auto& d = M5Cardputer.Display;
 
-  d.fillRect(0, 40, cfg::kScreenW, 12, cfg::kColorBg);
-  d.setTextColor(cfg::kColorFg, cfg::kColorBg);
+  d.fillRect(0, 40, cfg::kScreenW, 12, theme_.bg);
+  d.setTextColor(theme_.fg, theme_.bg);
   char timeBuf[24];
   if (p.durationMs == 0) {
     uint32_t posSec = p.positionMs / 1000;
@@ -317,14 +334,14 @@ void Ui::drawPlayingProgress(const PlayerSnapshot& p) {
   const int barW = 232;
   const int barX = (cfg::kScreenW - barW) / 2;
   const int barH = 6;
-  d.fillRect(barX, barY, barW, barH, cfg::kColorBg);
-  d.drawRect(barX, barY, barW, barH, cfg::kColorDim);
+  d.fillRect(barX, barY, barW, barH, theme_.bg);
+  d.drawRect(barX, barY, barW, barH, theme_.dim);
   if (p.durationMs > 0) {
     int fill = static_cast<int>((static_cast<uint64_t>(p.positionMs) * (barW - 2)) / p.durationMs);
     if (fill < 0) fill = 0;
     if (fill > barW - 2) fill = barW - 2;
     if (fill > 0) {
-      d.fillRect(barX + 1, barY + 1, fill, barH - 2, cfg::kColorFg);
+      d.fillRect(barX + 1, barY + 1, fill, barH - 2, theme_.fg);
     }
   }
 }
@@ -333,13 +350,13 @@ void Ui::drawPlaying(const PlayerSnapshot& p, bool full) {
   auto& d = M5Cardputer.Display;
 
   if (full) {
-    d.fillRect(0, 0, cfg::kScreenW, cfg::kScreenH - cfg::kHintBarH, cfg::kColorBg);
+    d.fillRect(0, 0, cfg::kScreenW, cfg::kScreenH - cfg::kHintBarH, theme_.bg);
   }
 
-  d.setTextColor(cfg::kColorFg, cfg::kColorBg);
+  d.setTextColor(theme_.fg, theme_.bg);
 
   if (full || p.state != lastPlayer_.state) {
-    d.fillRect(0, 4, 80, 12, cfg::kColorBg);
+    d.fillRect(0, 4, 80, 12, theme_.bg);
     const char* status = "IDLE";
     switch (p.state) {
       case PlayState::Playing: status = "PLAY"; break;
@@ -352,14 +369,14 @@ void Ui::drawPlaying(const PlayerSnapshot& p, bool full) {
   }
 
   if (full || std::strcmp(p.fileName, lastPlayer_.fileName) != 0) {
-    d.fillRect(0, 20, cfg::kScreenW, 16, cfg::kColorBg);
+    d.fillRect(0, 20, cfg::kScreenW, 16, theme_.bg);
     d.drawString(p.fileName, 4, 20);
   }
 
   drawPlayingProgress(p);
 
   if (full || p.volumePercent != lastPlayer_.volumePercent) {
-    d.fillRect(0, 74, 80, 12, cfg::kColorBg);
+    d.fillRect(0, 74, 80, 12, theme_.bg);
     char volBuf[12];
     snprintf(volBuf, sizeof(volBuf), "Vol %d%%", p.volumePercent);
     d.drawString(volBuf, 4, 74);
@@ -370,9 +387,9 @@ void Ui::drawPlaying(const PlayerSnapshot& p, bool full) {
 
 void Ui::drawSettings(const Settings& s) {
   auto& d = M5Cardputer.Display;
-  d.fillRect(0, 0, cfg::kScreenW, cfg::kScreenH - cfg::kHintBarH, cfg::kColorBg);
+  d.fillRect(0, 0, cfg::kScreenW, cfg::kScreenH - cfg::kHintBarH, theme_.bg);
 
-  d.setTextColor(cfg::kColorFg, cfg::kColorBg);
+  d.setTextColor(theme_.fg, theme_.bg);
   d.drawString("SETTINGS", 4, 2);
 
   const int rowH = 16;
@@ -380,8 +397,8 @@ void Ui::drawSettings(const Settings& s) {
   for (size_t i = 0; i < Settings::kCount; ++i) {
     const int y = startY + static_cast<int>(i) * rowH;
     const bool sel = (i == s.cursor());
-    const uint16_t bg = sel ? cfg::kColorSelectBg : cfg::kColorBg;
-    const uint16_t fg = sel ? cfg::kColorSelectFg : cfg::kColorFg;
+    const uint16_t bg = sel ? theme_.selectBg : theme_.bg;
+    const uint16_t fg = sel ? theme_.selectFg : theme_.fg;
     d.fillRect(0, y, cfg::kScreenW, rowH, bg);
     d.setTextColor(fg, bg);
 
@@ -405,8 +422,8 @@ void Ui::drawHint(const char* text) {
   }
   auto& d = M5Cardputer.Display;
   int y = cfg::kScreenH - cfg::kHintBarH;
-  d.fillRect(0, y, cfg::kScreenW, cfg::kHintBarH, cfg::kColorBg);
-  d.setTextColor(cfg::kColorDim, cfg::kColorBg);
+  d.fillRect(0, y, cfg::kScreenW, cfg::kHintBarH, theme_.bg);
+  d.setTextColor(theme_.dim, theme_.bg);
   d.drawString(text, 2, y + 2);
   if (text) {
     std::strncpy(lastHint_, text, sizeof(lastHint_) - 1);
@@ -423,7 +440,7 @@ void Ui::drawToastIfAny(uint32_t nowMs) {
   if (tw > cfg::kScreenW - 4) tw = cfg::kScreenW - 4;
   int tx = (cfg::kScreenW - tw) / 2;
   int ty = cfg::kScreenH / 2 - 8;
-  d.fillRect(tx, ty, tw, 16, cfg::kColorFg);
-  d.setTextColor(cfg::kColorBg, cfg::kColorFg);
+  d.fillRect(tx, ty, tw, 16, theme_.fg);
+  d.setTextColor(theme_.bg, theme_.fg);
   d.drawString(toast_.text, tx + 4, ty + 4);
 }

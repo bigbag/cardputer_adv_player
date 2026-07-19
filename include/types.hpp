@@ -40,5 +40,6 @@ struct SettingsSnapshot {
   uint8_t brightness;
   uint32_t displayTimeoutMs;  // 0 = never
   bool autoNext;
+  size_t themeIndex;
   size_t cursor;
 };

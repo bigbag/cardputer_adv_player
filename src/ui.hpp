@@ -1,6 +1,7 @@
 #pragma once
 #include "types.hpp"
 #include "settings.hpp"
+#include "theme.hpp"
 #include <cstdint>
 
 class Ui {
@@ -32,7 +33,9 @@ class Ui {
   void rememberBrowse(const BrowseSnapshot& b);
   void rememberPlayer(const PlayerSnapshot& p);
   void rememberSettings(const Settings& s);
+  void applyTheme(const Theme& t);
 
+  Theme theme_{};
   Toast toast_{};
   Screen lastScreen_{Screen::Browse};
   bool hasLastBrowse_ = false;

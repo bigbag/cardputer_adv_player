@@ -129,6 +129,7 @@ Authoritative map (matches firmware `src/input.cpp`):
 | Brightness | dimmer / brighter |
 | Scr timeout | cycle 5s → 10s → 30s → 60s → never |
 | Auto-next | toggle ON / OFF |
+| Theme | Phosphor / Amber / Cyan / Paper |
 
 | Key | Action |
 |-----|--------|

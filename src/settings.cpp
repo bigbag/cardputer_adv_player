@@ -14,6 +14,7 @@ void Settings::load() {
   brightness_ = cfg::kDisplayBrightness;
   displayTimeoutMs_ = cfg::kDisplayTimeoutMs;
   autoNext_ = true;
+  themeIndex_ = 0;
   cursor_ = 0;
 
 #ifndef UNIT_TEST
@@ -24,10 +25,12 @@ void Settings::load() {
   brightness_ = prefs.getUChar("bright", brightness_);
   displayTimeoutMs_ = prefs.getUInt("timeout", displayTimeoutMs_);
   autoNext_ = prefs.getBool("autonext", autoNext_);
+  themeIndex_ = static_cast<size_t>(prefs.getUChar("theme", 0));
   prefs.end();
 
   if (volumePercent_ < 0) volumePercent_ = 0;
   if (volumePercent_ > 100) volumePercent_ = 100;
+  if (themeIndex_ >= themes::kCount) themeIndex_ = 0;
 #endif
 }
 
@@ -38,6 +41,7 @@ void Settings::save() const {
   prefs.putUChar("bright", brightness_);
   prefs.putUInt("timeout", displayTimeoutMs_);
   prefs.putBool("autonext", autoNext_);
+  prefs.putUChar("theme", static_cast<uint8_t>(themeIndex_));
   prefs.end();
 #endif
 }
@@ -48,6 +52,7 @@ SettingsSnapshot Settings::snapshot() const {
   s.brightness = brightness_;
   s.displayTimeoutMs = displayTimeoutMs_;
   s.autoNext = autoNext_;
+  s.themeIndex = themeIndex_;
   s.cursor = cursor_;
   return s;
 }
@@ -58,9 +63,7 @@ void Settings::setVolumePercent(int v) {
   volumePercent_ = v;
 }
 
-void Settings::setBrightness(uint8_t b) {
-  brightness_ = b;
-}
+void Settings::setBrightness(uint8_t b) { brightness_ = b; }
 
 void Settings::adjustBrightness(int delta) {
   int v = static_cast<int>(brightness_) + delta;
@@ -70,7 +73,6 @@ void Settings::adjustBrightness(int delta) {
 }
 
 void Settings::cycleDisplayTimeout() {
-  // 5s, 10s, 30s, 60s, never
   if (displayTimeoutMs_ == 5000) {
     displayTimeoutMs_ = 10000;
   } else if (displayTimeoutMs_ == 10000) {
@@ -78,15 +80,26 @@ void Settings::cycleDisplayTimeout() {
   } else if (displayTimeoutMs_ == 30000) {
     displayTimeoutMs_ = 60000;
   } else if (displayTimeoutMs_ == 60000) {
-    displayTimeoutMs_ = 0;  // never
+    displayTimeoutMs_ = 0;
   } else {
     displayTimeoutMs_ = 5000;
   }
 }
 
 void Settings::setAutoNext(bool on) { autoNext_ = on; }
-
 void Settings::toggleAutoNext() { autoNext_ = !autoNext_; }
+
+void Settings::setThemeIndex(size_t i) {
+  if (i >= themes::kCount) i = 0;
+  themeIndex_ = i;
+}
+
+void Settings::cycleTheme(int delta) {
+  int i = static_cast<int>(themeIndex_) + delta;
+  while (i < 0) i += static_cast<int>(themes::kCount);
+  while (i >= static_cast<int>(themes::kCount)) i -= static_cast<int>(themes::kCount);
+  themeIndex_ = static_cast<size_t>(i);
+}
 
 void Settings::moveCursor(int delta) {
   int c = static_cast<int>(cursor_) + delta;
@@ -101,6 +114,7 @@ const char* Settings::label(size_t index) const {
     case 1: return "Brightness";
     case 2: return "Scr timeout";
     case 3: return "Auto-next";
+    case 4: return "Theme";
     default: return "?";
   }
 }
@@ -112,7 +126,6 @@ void Settings::formatValue(size_t index, char* buf, size_t cap) const {
       snprintf(buf, cap, "%d%%", volumePercent_);
       break;
     case 1:
-      // brightness 10..255 → rough percent
       snprintf(buf, cap, "%d%%",
                static_cast<int>((static_cast<int>(brightness_) * 100 + 127) / 255));
       break;
@@ -125,6 +138,9 @@ void Settings::formatValue(size_t index, char* buf, size_t cap) const {
       break;
     case 3:
       snprintf(buf, cap, "%s", autoNext_ ? "ON" : "OFF");
+      break;
+    case 4:
+      snprintf(buf, cap, "%s", themes::name(themeIndex_));
       break;
     default:
       buf[0] = '\0';

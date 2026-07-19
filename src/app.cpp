@@ -196,7 +196,6 @@ void App::handleSettings(Action a) {
       break;
     case Action::VolUp:
     case Action::SeekFwd:
-      // increase / next value
       switch (settings_.cursor()) {
         case 0:
           settings_.setVolumePercent(settings_.volumePercent() + cfg::kVolumeStepPercent);
@@ -213,6 +212,9 @@ void App::handleSettings(Action a) {
         case 3:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
+          break;
+        case 4:
+          settings_.cycleTheme(+1);
           break;
         default:
           break;
@@ -231,7 +233,6 @@ void App::handleSettings(Action a) {
           M5Cardputer.Display.setBrightness(settings_.brightness());
           break;
         case 2:
-          // cycle reverse: call cycle enough times (5 options)
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
@@ -240,6 +241,9 @@ void App::handleSettings(Action a) {
         case 3:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
+          break;
+        case 4:
+          settings_.cycleTheme(-1);
           break;
         default:
           break;
@@ -247,7 +251,6 @@ void App::handleSettings(Action a) {
       break;
     case Action::Enter:
     case Action::Space:
-      // toggle / cycle primary action on row
       switch (settings_.cursor()) {
         case 2:
           settings_.cycleDisplayTimeout();
@@ -255,6 +258,9 @@ void App::handleSettings(Action a) {
         case 3:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
+          break;
+        case 4:
+          settings_.cycleTheme(+1);
           break;
         default:
           break;
