@@ -2,6 +2,7 @@
 #include "path_utils.hpp"
 #include "config.hpp"
 #include <M5Cardputer.h>
+#include <SD.h>
 #include <cstring>
 
 void App::begin() {
@@ -11,24 +12,30 @@ void App::begin() {
   M5Cardputer.Display.setRotation(1);
   M5Cardputer.Display.setFont(&fonts::Font0);
 
-  settings_.load();
-  Serial.printf("[app] board=%d vol=%d bright=%u timeout=%lu autonext=%d\n",
-                static_cast<int>(M5.getBoard()), settings_.volumePercent(),
-                settings_.brightness(),
-                static_cast<unsigned long>(settings_.displayTimeoutMs()),
-                settings_.autoNext() ? 1 : 0);
+  Serial.printf("[app] board=%d\n", static_cast<int>(M5.getBoard()));
 
   if (!audio_.begin()) {
     Serial.println("[app] audio begin FAILED");
   }
+  // SD must be mounted before loading /.asvmp3/config.cfg
   browser_.begin();
   browser_.listCurrent();
+  settings_.load();
+  Serial.printf("[app] cfg vol=%d bright=%u timeout=%lu theme=%u autonext=%d\n",
+                settings_.volumePercent(), settings_.brightness(),
+                static_cast<unsigned long>(settings_.displayTimeoutMs()),
+                static_cast<unsigned>(settings_.themeIndex()),
+                settings_.autoNext() ? 1 : 0);
+
   player_.begin(&audio_, &browser_);
   ui_.begin();
   input_.begin();
 
   applySettings();
-  player_.setVolumePercent(settings_.volumePercent());
+  // Create config file only if missing (so first boot has something on disk).
+  if (browser_.sdOk() && !SD.exists(Settings::kConfigPath)) {
+    settings_.save();
+  }
 
   lastActivityMs_ = millis();
   ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, lastActivityMs_, true);
@@ -49,8 +56,12 @@ void App::openSettings() {
 }
 
 void App::closeSettings() {
-  settings_.save();
   applySettings();
+  if (settings_.save()) {
+    ui_.showToast("Saved", millis());
+  } else {
+    ui_.showToast("Save fail (SD?)", millis());
+  }
   screen_ = settingsReturn_;
 }
 
@@ -133,7 +144,10 @@ void App::handleBrowse(Action a) {
     case Action::Enter: {
       if (!browser_.sdOk()) {
         Serial.println("[app] SD retry");
-        browser_.remount();
+        if (browser_.remount()) {
+          settings_.load();
+          applySettings();
+        }
         break;
       }
       if (browser_.count() == 0) break;
@@ -169,10 +183,12 @@ void App::handlePlaying(Action a) {
     case Action::VolUp:
       player_.adjustVolume(cfg::kVolumeStepPercent);
       settings_.setVolumePercent(player_.volumePercent());
+      settings_.save();  // persist immediately
       break;
     case Action::VolDown:
       player_.adjustVolume(-cfg::kVolumeStepPercent);
       settings_.setVolumePercent(player_.volumePercent());
+      settings_.save();
       break;
     case Action::SeekFwd:
       player_.seekRelative(cfg::kSeekStepSeconds);
