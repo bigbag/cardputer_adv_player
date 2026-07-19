@@ -2,7 +2,7 @@
 # Wraps PlatformIO commands. Override the launcher if system Python is 3.14+:
 #   make build PIO="python3.12 -m platformio"
 
-.PHONY: all build upload flash clean monitor test test-native size help
+.PHONY: all build upload flash flash-nostub flash-bootloader clean monitor test test-native size help
 
 # Prefer a PlatformIO-supported Python when plain `pio` is on 3.14+
 PIO ?= $(shell \
@@ -30,6 +30,16 @@ upload: ## Build and flash firmware
 	$(PIO) run -e $(ENV_DEVICE) --target upload
 
 flash: upload ## Alias for upload
+
+flash-nostub: ## Flash without ROM stub (if ACM drops after "Stub running")
+	$(PIO) run -e cardputer-adv-nostub --target upload
+
+flash-bootloader: ## Flash after manual download mode (see help)
+	@echo "1) Power OFF"
+	@echo "2) Hold G0, power ON, release G0"
+	@echo "3) Confirm /dev/ttyACM0 exists, then Enter"
+	@read _
+	$(PIO) run -e $(ENV_DEVICE) --target upload --upload-port /dev/ttyACM0
 
 clean: ## Clean PlatformIO build artifacts
 	$(PIO) run -e $(ENV_DEVICE) --target clean
