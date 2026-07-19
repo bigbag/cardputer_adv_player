@@ -306,7 +306,7 @@ void Ui::drawBrowse(const BrowseSnapshot& b, bool full) {
     d.drawString("* truncated", 2, truncY);
   }
 
-  drawHint(";. move  ,/ val  S set");
+  drawHint(";. move  P play  S set");
 }
 
 void Ui::drawPlayingProgress(const PlayerSnapshot& p) {
@@ -383,7 +383,7 @@ void Ui::drawPlaying(const PlayerSnapshot& p, bool full) {
     d.drawString(volBuf, 4, 74);
   }
 
-  drawHint(";. trk  ,/ vol  [] seek");
+  drawHint(";. trk  P brws  [] seek");
 }
 
 void Ui::drawSettings(const Settings& s) {

@@ -106,6 +106,7 @@ Authoritative map (matches firmware `src/input.cpp`):
 - **`;` / `.`** — Cursor up / down
 - **`Enter`** — Open folder or play file
 - **`Space`** — Play highlighted audio file
+- **`P`** — Jump to Now Playing (if a track is loaded; audio keeps going)
 - **`S` or `Tab`** — Settings
 - **`Backspace` or `` ` ``** — Parent directory
 - **`Enter` when no SD** — Retry mount
@@ -116,10 +117,11 @@ Authoritative map (matches firmware `src/input.cpp`):
 
 - **`Space`** — Play / pause
 - **`;`** — Previous track (restart current if >3 s in; else previous file)
-- **`.`** — Next track in folder (`N` / `P` aliases also work)
+- **`.`** — Next track in folder (`N` alias also works)
 - **`,`** — Volume down
 - **`/`** — Volume up
 - **`[` / `]`** — Seek −/+ ~5 s
+- **`P`** — Back to Browse (toggle; audio keeps playing)
 - **`S` or `Tab`** — Settings
 - **`Backspace`** — Back to browse (audio keeps playing)
 
@@ -173,7 +175,7 @@ next audio file in the **same folder** auto-plays; if none remain, status shows 
 5. Reject bad/non-PCM WAV with toast
 6. Pause / resume, volume, seek, next/prev track
 7. Auto-next within folder; last file → DONE
-8. Backspace to Browse while audio continues; open new file switches track
+8. Backspace or **P** toggles Browse ↔ Playing while audio continues; open new file switches track
 9. Headphone jack mutes speaker amp
 10. Settings survive reboot (`/.asvmp3/config.cfg`)
 11. Last track on boot follows **On boot** (play / browse / off)

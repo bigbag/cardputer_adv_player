@@ -165,6 +165,20 @@ void App::handle(Action a) {
     return;
   }
 
+  // Global: P toggles Browse ↔ Playing when a track is loaded.
+  if (a == Action::TogglePlayer && screen_ != Screen::Settings) {
+    const char* path = player_.currentPath();
+    const bool hasTrack = path && path[0] == '/';
+    if (screen_ == Screen::Playing) {
+      screen_ = Screen::Browse;
+    } else if (hasTrack) {
+      screen_ = Screen::Playing;
+    } else {
+      ui_.showToast("Nothing playing", millis());
+    }
+    return;
+  }
+
   switch (screen_) {
     case Screen::Browse:
       handleBrowse(a);

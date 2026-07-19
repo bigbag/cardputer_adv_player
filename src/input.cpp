@@ -65,8 +65,8 @@ Action Input::poll(Screen screen) {
         break;
       case 'p':
       case 'P':
-        if (playing) return Action::PrevTrack;
-        break;
+        // Browse ↔ Playing when a track is loaded (not prev — use ';')
+        return Action::TogglePlayer;
       default:
         break;
     }

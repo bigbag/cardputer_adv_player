@@ -14,6 +14,7 @@ enum class Action : uint8_t {
   SeekBack,
   NextTrack,  // play mode: next audio in folder
   PrevTrack,  // play mode: prev / restart current
+  TogglePlayer,  // Browse ↔ Playing when a track is loaded
   RetrySd,
   Settings,  // open settings (Tab or 's')
 };
