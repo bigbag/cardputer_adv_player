@@ -118,7 +118,8 @@ size_t AudioOut::write(const int16_t* stereoFrames, size_t frames) {
     }
 
     size_t bytesWritten = 0;
-    i2s_write(kI2sPort, buf, n * 4, &bytesWritten, portMAX_DELAY);
+    esp_err_t err = i2s_write(kI2sPort, buf, n * 4, &bytesWritten, portMAX_DELAY);
+    if (err != ESP_OK || bytesWritten == 0) break;
     written += bytesWritten / 4;
   }
 

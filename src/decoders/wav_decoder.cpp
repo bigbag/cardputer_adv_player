@@ -61,8 +61,10 @@ WavInfo wavParseHeader(const uint8_t* data, size_t len) {
       foundData = true;
     }
 
-    pos += 8 + chunkSize;
-    if (chunkSize & 1) pos++;
+    size_t advance = static_cast<size_t>(chunkSize) + 8;
+    if (chunkSize & 1) advance++;
+    if (advance > len - pos) break;
+    pos += advance;
   }
 
   if (!foundFmt) {

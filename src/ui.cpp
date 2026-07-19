@@ -63,7 +63,7 @@ void Ui::drawBrowse(const BrowseSnapshot& b) {
 
   // List area
   int listY = 12;
-  size_t visible = b.count - b.scroll;
+  size_t visible = (b.count > b.scroll) ? b.count - b.scroll : 0;
   if (visible > cfg::kMaxVisibleRows) visible = cfg::kMaxVisibleRows;
 
   for (size_t i = 0; i < cfg::kMaxVisibleRows; ++i) {

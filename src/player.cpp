@@ -63,7 +63,7 @@ bool Player::open(const char* absPath) {
   stopReq_.store(false);
   paused_.store(false);
   seekDeltaMs_.store(0);
-  autoNextPending_ = false;
+  autoNextPending_.store(false);
   state_ = PlayState::Playing;
 
   xTaskCreatePinnedToCore(audioTaskThunk, "audio", cfg::kAudioTaskStack,
@@ -79,7 +79,7 @@ void Player::stop() {
     }
   }
   closeDecoder();
-  autoNextPending_ = false;
+  autoNextPending_.store(false);
   state_ = PlayState::Idle;
   currentPath_[0] = '\0';
   currentName_[0] = '\0';
@@ -116,7 +116,7 @@ void Player::audioTaskMain() {
 
     if (st == DecodeStatus::Finished) {
       state_ = PlayState::Done;
-      autoNextPending_ = true;
+      autoNextPending_.store(true);
       break;
     }
     if (st == DecodeStatus::Error) {
@@ -167,8 +167,13 @@ void Player::adjustVolume(int deltaPercent) {
 }
 
 void Player::service() {
+#ifndef UNIT_TEST
+  if (!autoNextPending_.load()) return;
+  autoNextPending_.store(false);
+#else
   if (!autoNextPending_) return;
   autoNextPending_ = false;
+#endif
   enqueueAutoNext();
 }
 

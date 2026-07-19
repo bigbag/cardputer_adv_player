@@ -47,10 +47,13 @@ class Player {
   std::atomic<bool> stopReq_{false};
   std::atomic<bool> paused_{false};
   std::atomic<int32_t> seekDeltaMs_{0};
+  std::atomic<bool> autoNextPending_{false};
 #endif
 
   volatile PlayState state_ = PlayState::Idle;
+#ifdef UNIT_TEST
   bool autoNextPending_ = false;
+#endif
   char currentPath_[cfg::kMaxPathLen]{};
   char currentName_[cfg::kMaxNameLen]{};
   char lastError_[48]{};
