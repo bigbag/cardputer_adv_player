@@ -198,23 +198,23 @@ void App::handleSettings(Action a) {
     case Action::SeekFwd:
       switch (settings_.cursor()) {
         case 0:
+          settings_.cycleTheme(+1);
+          break;
+        case 1:
           settings_.setVolumePercent(settings_.volumePercent() + cfg::kVolumeStepPercent);
           player_.setVolumePercent(settings_.volumePercent());
           break;
-        case 1:
+        case 2:
           settings_.adjustBrightness(+15);
           ui_.setBrightness(settings_.brightness());
           M5Cardputer.Display.setBrightness(settings_.brightness());
           break;
-        case 2:
+        case 3:
           settings_.cycleDisplayTimeout();
           break;
-        case 3:
+        case 4:
           settings_.toggleAutoNext();
           player_.setAutoNext(settings_.autoNext());
-          break;
-        case 4:
-          settings_.cycleTheme(+1);
           break;
         default:
           break;
@@ -224,26 +224,26 @@ void App::handleSettings(Action a) {
     case Action::SeekBack:
       switch (settings_.cursor()) {
         case 0:
+          settings_.cycleTheme(-1);
+          break;
+        case 1:
           settings_.setVolumePercent(settings_.volumePercent() - cfg::kVolumeStepPercent);
           player_.setVolumePercent(settings_.volumePercent());
           break;
-        case 1:
+        case 2:
           settings_.adjustBrightness(-15);
           ui_.setBrightness(settings_.brightness());
           M5Cardputer.Display.setBrightness(settings_.brightness());
           break;
-        case 2:
-          settings_.cycleDisplayTimeout();
-          settings_.cycleDisplayTimeout();
-          settings_.cycleDisplayTimeout();
-          settings_.cycleDisplayTimeout();
-          break;
         case 3:
-          settings_.toggleAutoNext();
-          player_.setAutoNext(settings_.autoNext());
+          settings_.cycleDisplayTimeout();
+          settings_.cycleDisplayTimeout();
+          settings_.cycleDisplayTimeout();
+          settings_.cycleDisplayTimeout();
           break;
         case 4:
-          settings_.cycleTheme(-1);
+          settings_.toggleAutoNext();
+          player_.setAutoNext(settings_.autoNext());
           break;
         default:
           break;
@@ -252,15 +252,15 @@ void App::handleSettings(Action a) {
     case Action::Enter:
     case Action::Space:
       switch (settings_.cursor()) {
-        case 2:
-          settings_.cycleDisplayTimeout();
+        case 0:
+          settings_.cycleTheme(+1);
           break;
         case 3:
-          settings_.toggleAutoNext();
-          player_.setAutoNext(settings_.autoNext());
+          settings_.cycleDisplayTimeout();
           break;
         case 4:
-          settings_.cycleTheme(+1);
+          settings_.toggleAutoNext();
+          player_.setAutoNext(settings_.autoNext());
           break;
         default:
           break;

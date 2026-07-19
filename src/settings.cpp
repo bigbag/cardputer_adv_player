@@ -110,11 +110,11 @@ void Settings::moveCursor(int delta) {
 
 const char* Settings::label(size_t index) const {
   switch (index) {
-    case 0: return "Volume";
-    case 1: return "Brightness";
-    case 2: return "Scr timeout";
-    case 3: return "Auto-next";
-    case 4: return "Theme";
+    case 0: return "Theme";
+    case 1: return "Volume";
+    case 2: return "Brightness";
+    case 3: return "Scr timeout";
+    case 4: return "Auto-next";
     default: return "?";
   }
 }
@@ -123,24 +123,24 @@ void Settings::formatValue(size_t index, char* buf, size_t cap) const {
   if (!buf || cap == 0) return;
   switch (index) {
     case 0:
-      snprintf(buf, cap, "%d%%", volumePercent_);
+      snprintf(buf, cap, "%s", themes::name(themeIndex_));
       break;
     case 1:
+      snprintf(buf, cap, "%d%%", volumePercent_);
+      break;
+    case 2:
       snprintf(buf, cap, "%d%%",
                static_cast<int>((static_cast<int>(brightness_) * 100 + 127) / 255));
       break;
-    case 2:
+    case 3:
       if (displayTimeoutMs_ == 0) {
         snprintf(buf, cap, "never");
       } else {
         snprintf(buf, cap, "%lus", static_cast<unsigned long>(displayTimeoutMs_ / 1000));
       }
       break;
-    case 3:
-      snprintf(buf, cap, "%s", autoNext_ ? "ON" : "OFF");
-      break;
     case 4:
-      snprintf(buf, cap, "%s", themes::name(themeIndex_));
+      snprintf(buf, cap, "%s", autoNext_ ? "ON" : "OFF");
       break;
     default:
       buf[0] = '\0';

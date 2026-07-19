@@ -31,7 +31,7 @@ class Settings {
   void cycleTheme(int delta);
   const Theme& theme() const { return themes::get(themeIndex_); }
 
-  // Setting rows: Volume, Brightness, Scr timeout, Auto-next, Theme
+  // Setting rows: Theme, Volume, Brightness, Scr timeout, Auto-next
   static constexpr size_t kCount = 5;
   size_t cursor() const { return cursor_; }
   void moveCursor(int delta);
