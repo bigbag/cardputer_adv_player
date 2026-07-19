@@ -29,6 +29,10 @@ class Settings {
   void setAutoNext(bool on);
   void toggleAutoNext();
 
+  OnBootMode onBoot() const { return onBoot_; }
+  void setOnBoot(OnBootMode m);
+  void cycleOnBoot(int delta);  // +1 / -1 through Play → Browse → Off
+
   size_t themeIndex() const { return themeIndex_; }
   void setThemeIndex(size_t i);
   void cycleTheme(int delta);
@@ -38,7 +42,7 @@ class Settings {
   const char* lastPath() const { return lastPath_; }
   void setLastPath(const char* absPath);  // no-op if unchanged
 
-  static constexpr size_t kCount = 5;
+  static constexpr size_t kCount = 6;
   size_t cursor() const { return cursor_; }
   void moveCursor(int delta);
 
@@ -57,6 +61,7 @@ class Settings {
   uint8_t brightness_ = 128;
   uint32_t displayTimeoutMs_ = 10000;
   bool autoNext_ = true;
+  OnBootMode onBoot_ = OnBootMode::Play;
   size_t themeIndex_ = 0;
   size_t cursor_ = 0;
   char lastPath_[cfg::kMaxPathLen]{};

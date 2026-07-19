@@ -19,6 +19,7 @@ void Settings::applyDefaults() {
   brightness_ = cfg::kDisplayBrightness;
   displayTimeoutMs_ = cfg::kDisplayTimeoutMs;
   autoNext_ = true;
+  onBoot_ = OnBootMode::Play;
   themeIndex_ = 0;
   cursor_ = 0;
   lastPath_[0] = '\0';
@@ -75,6 +76,19 @@ bool Settings::parseLine(const char* line) {
   } else if (std::strcmp(key, "autonext") == 0) {
     autoNext_ = (std::strcmp(val, "1") == 0 || std::strcmp(val, "true") == 0 ||
                  std::strcmp(val, "on") == 0 || std::strcmp(val, "yes") == 0);
+  } else if (std::strcmp(key, "on_boot") == 0 || std::strcmp(key, "onboot") == 0) {
+    for (char* p = val; *p; ++p) {
+      *p = static_cast<char>(std::tolower(static_cast<unsigned char>(*p)));
+    }
+    if (std::strcmp(val, "browse") == 0 || std::strcmp(val, "reveal") == 0) {
+      onBoot_ = OnBootMode::Browse;
+    } else if (std::strcmp(val, "off") == 0 || std::strcmp(val, "none") == 0 ||
+               std::strcmp(val, "false") == 0 || std::strcmp(val, "0") == 0) {
+      onBoot_ = OnBootMode::Off;
+    } else {
+      // play, resume, unknown → Play (safe default / legacy)
+      onBoot_ = OnBootMode::Play;
+    }
   } else if (std::strcmp(key, "theme") == 0) {
     if (std::isdigit(static_cast<unsigned char>(val[0]))) {
       themeIndex_ = static_cast<size_t>(std::atoi(val));
@@ -161,10 +175,13 @@ void Settings::load() {
   f.close();
   clamp();
 
-  Serial.printf("[cfg] loaded %s (%d keys) vol=%d bright=%u timeout=%lu theme=%s autonext=%d\n",
+  const char* bootStr = "play";
+  if (onBoot_ == OnBootMode::Browse) bootStr = "browse";
+  else if (onBoot_ == OnBootMode::Off) bootStr = "off";
+  Serial.printf("[cfg] loaded %s (%d keys) vol=%d bright=%u timeout=%lu theme=%s autonext=%d on_boot=%s\n",
                 path, parsed, volume_, brightness_,
                 static_cast<unsigned long>(displayTimeoutMs_),
-                themes::name(themeIndex_), autoNext_ ? 1 : 0);
+                themes::name(themeIndex_), autoNext_ ? 1 : 0, bootStr);
 
   // If we loaded legacy path, rewrite to hidden location.
   if (path != kConfigPath) {
@@ -219,6 +236,11 @@ bool Settings::save() {
   ok = ok && wr(line);
   std::snprintf(line, sizeof(line), "autonext=%s\n", autoNext_ ? "on" : "off");
   ok = ok && wr(line);
+  const char* bootStr = "play";
+  if (onBoot_ == OnBootMode::Browse) bootStr = "browse";
+  else if (onBoot_ == OnBootMode::Off) bootStr = "off";
+  std::snprintf(line, sizeof(line), "on_boot=%s\n", bootStr);
+  ok = ok && wr(line);
   std::snprintf(line, sizeof(line), "last_path=%s\n", lastPath_);
   ok = ok && wr(line);
 
@@ -270,10 +292,10 @@ bool Settings::save() {
     SD.remove(kConfigTmp);
   }
 
-  Serial.printf("[cfg] saved %s vol=%d bright=%u timeout=%lu theme=%s autonext=%s (%u bytes)\n",
+  Serial.printf("[cfg] saved %s vol=%d bright=%u timeout=%lu theme=%s autonext=%s on_boot=%s (%u bytes)\n",
                 kConfigPath, volume_, static_cast<unsigned>(brightness_),
                 static_cast<unsigned long>(displayTimeoutMs_),
-                themes::name(themeIndex_), autoNext_ ? "on" : "off",
+                themes::name(themeIndex_), autoNext_ ? "on" : "off", bootStr,
                 static_cast<unsigned>(sz));
   return true;
 }
@@ -284,6 +306,7 @@ SettingsSnapshot Settings::snapshot() const {
   s.brightness = brightness_;
   s.displayTimeoutMs = displayTimeoutMs_;
   s.autoNext = autoNext_;
+  s.onBoot = onBoot_;
   s.themeIndex = themeIndex_;
   s.cursor = cursor_;
   return s;
@@ -323,6 +346,17 @@ void Settings::cycleDisplayTimeout() {
 void Settings::setAutoNext(bool on) { autoNext_ = on; }
 void Settings::toggleAutoNext() { autoNext_ = !autoNext_; }
 
+void Settings::setOnBoot(OnBootMode m) { onBoot_ = m; }
+
+void Settings::cycleOnBoot(int delta) {
+  // Order: Play(0) → Browse(1) → Off(2)
+  int i = static_cast<int>(onBoot_) + delta;
+  constexpr int n = 3;
+  while (i < 0) i += n;
+  while (i >= n) i -= n;
+  onBoot_ = static_cast<OnBootMode>(i);
+}
+
 void Settings::setThemeIndex(size_t i) {
   if (i >= themes::kCount) i = 0;
   themeIndex_ = i;
@@ -349,6 +383,7 @@ const char* Settings::label(size_t index) const {
     case 2: return "Brightness";
     case 3: return "Scr timeout";
     case 4: return "Auto-next";
+    case 5: return "On boot";
     default: return "?";
   }
 }
@@ -375,6 +410,15 @@ void Settings::formatValue(size_t index, char* buf, size_t cap) const {
       break;
     case 4:
       snprintf(buf, cap, "%s", autoNext_ ? "ON" : "OFF");
+      break;
+    case 5:
+      if (onBoot_ == OnBootMode::Browse) {
+        snprintf(buf, cap, "browse");
+      } else if (onBoot_ == OnBootMode::Off) {
+        snprintf(buf, cap, "off");
+      } else {
+        snprintf(buf, cap, "play");
+      }
       break;
     default:
       buf[0] = '\0';
