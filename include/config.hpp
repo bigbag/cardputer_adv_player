@@ -51,7 +51,8 @@ constexpr size_t kMaxPathLen = 256;
 constexpr size_t kMaxNameLen = 64;
 constexpr int kVolumeStepPercent = 5;
 constexpr int kSeekStepSeconds = 5;
-constexpr int kDefaultVolumePercent = 70;
+// UI default; HP path is further attenuated in AudioOut.
+constexpr int kDefaultVolumePercent = 40;
 constexpr uint32_t kToastMs = 1500;
 
 // Audio task / buffers

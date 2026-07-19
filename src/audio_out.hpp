@@ -20,8 +20,15 @@ class AudioOut {
   bool esInitRegisters();
   bool i2sStart(uint32_t rate);
   void i2sStop();
+  void applyVolume();
+  // 0..100 UI → 0..100 effective after HP curve
+  int effectiveVolumePercent() const;
+  // ES8311 DAC reg 0x32 value for 0..100 percent
+  static uint8_t esDacRegFromPercent(int percent);
 
   uint32_t rate_ = 0;
   int volume_ = 70;
   bool ready_ = false;
+  bool hpInserted_ = false;
+  int softScale_ = 100;  // residual software scale 0..100 after DAC set
 };
