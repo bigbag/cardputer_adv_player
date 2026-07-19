@@ -129,7 +129,7 @@ Authoritative map (matches firmware `src/input.cpp`):
 
 Rows (change with `,` / `/`):
 
-- **Theme** — Phosphor / Amber / Cyan / Paper
+- **Theme** — Phosphor / Amber / Cyan / VGA / Matrix / Hot / Blood
 - **Volume** — 0–100% wide curve (low = quiet jack, high = louder speaker)
 - **Brightness** — dimmer / brighter
 - **Scr timeout** — 5s / 10s / 30s / 60s / never
