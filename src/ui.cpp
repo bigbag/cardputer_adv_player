@@ -288,7 +288,7 @@ void Ui::drawBrowse(const BrowseSnapshot& b, bool full) {
     d.drawString("* truncated", 2, truncY);
   }
 
-  drawHint(";/ move  Ent open  S set");
+  drawHint(";. move  ,/ val  S set");
 }
 
 void Ui::drawPlayingProgress(const PlayerSnapshot& p) {
@@ -365,7 +365,7 @@ void Ui::drawPlaying(const PlayerSnapshot& p, bool full) {
     d.drawString(volBuf, 4, 74);
   }
 
-  drawHint("Spc pause  S set  Bs list");
+  drawHint("Spc pause  ,/ vol  S set");
 }
 
 void Ui::drawSettings(const Settings& s) {
@@ -396,7 +396,7 @@ void Ui::drawSettings(const Settings& s) {
     d.drawString(val, cfg::kScreenW - 4 - vw, y + 3);
   }
 
-  drawHint(";/ move  ,.= adj  Ent ok  Bs");
+  drawHint(";. move  ,/ adj  Bs save");
 }
 
 void Ui::drawHint(const char* text) {

@@ -83,45 +83,57 @@ Any folder tree works; the browser starts at SD root. Hidden `.*` names are skip
 
 Authoritative map (matches firmware `src/input.cpp`):
 
+### Navigation diamond (physical keys)
+
+```text
+       ;          up
+    ,  .  /     left  down  right
+```
+
+| Key | Meaning |
+|-----|--------|
+| `;` | **Up** |
+| `.` | **Down** |
+| `,` | **Left** = decrease / vol down |
+| `/` | **Right** = increase / vol up |
+
 ### Browse
 
 | Key | Action |
 |-----|--------|
-| `;` | Cursor up |
-| `.` or `/` | Cursor down |
+| `;` / `.` | Cursor up / down |
 | `Enter` | Open folder or play file |
 | `Space` | Play highlighted audio file |
 | `S` or `Tab` | **Settings** |
 | `Backspace` or `` ` `` | Parent directory |
 | `Enter` when no SD | Retry mount |
 
-> Cardputer has **no Esc key**. Use **Backspace** (or `` ` ``) for Back.
+> No Esc on Cardputer — use **Backspace** (or `` ` ``) for Back.
 
 ### Now Playing
 
 | Key | Action |
 |-----|--------|
 | `Space` | Play / pause |
-| `,` or `-` | Volume down (~5%) |
-| `=` or `+` | Volume up (~5%) |
-| `[` | Seek back ~5 s |
-| `]` | Seek forward ~5 s |
+| `,` | Volume down |
+| `/` | Volume up |
+| `[` / `]` | Seek −/+ ~5 s |
 | `S` or `Tab` | **Settings** |
-| `Backspace` or `` ` `` | Back to browse (**audio keeps playing**) |
+| `Backspace` | Back to browse (audio keeps playing) |
 
 ### Settings (`S` / Tab)
 
-| Item | Adjust |
-|------|--------|
-| Volume | `,` / `.` or `-` / `=` |
-| Brightness | same |
-| Scr timeout | cycle 5s / 10s / 30s / 60s / never |
-| Auto-next | ON / OFF (next track in folder) |
+| Item | Left `,` / Right `/` |
+|------|----------------------|
+| Volume | − / + 5% |
+| Brightness | dimmer / brighter |
+| Scr timeout | cycle 5s → 10s → 30s → 60s → never |
+| Auto-next | toggle ON / OFF |
 
 | Key | Action |
 |-----|--------|
 | `;` / `.` | Move row |
-| `,` `.` `-` `=` `[` `]` | Change value |
+| `,` / `/` | Decrease / increase |
 | `Enter` | Toggle timeout / auto-next |
 | `Backspace` / `S` | Save & exit |
 

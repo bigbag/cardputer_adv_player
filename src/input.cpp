@@ -4,6 +4,8 @@
 void Input::begin() {}
 
 Action Input::poll(Screen screen) {
+  (void)screen;  // layout is global; no per-screen key conflicts now
+
   // M5Cardputer.update() must have been called (App::loop does this).
   if (!M5Cardputer.Keyboard.isChange() || !M5Cardputer.Keyboard.isPressed()) {
     return Action::None;
@@ -11,33 +13,34 @@ Action Input::poll(Screen screen) {
 
   const Keyboard_Class::KeysState& st = M5Cardputer.Keyboard.keysState();
 
-  // Enter / Space / Backspace are NOT in st.word — check flags first.
+  // Special keys are NOT in st.word.
   if (st.enter) {
     return Action::Enter;
   }
   if (st.space) {
     return Action::Space;
   }
-  // No Esc key on Cardputer; backspace acts as Back (parent / leave player).
   if (st.del) {
     return Action::Back;
   }
-
   if (st.tab) {
     return Action::Settings;
   }
 
+  // Cardputer diamond cluster (physical):
+  //        ;
+  //     ,  .  /
+  //   left down right   (up = ;)
   for (char key : st.word) {
     switch (key) {
       case ';':
         return Action::Up;
-      case '/':
-        return Action::Down;
       case '.':
-        // Lists (Browse/Settings): down. Playing: volume up.
-        return (screen == Screen::Playing) ? Action::VolUp : Action::Down;
+        return Action::Down;
       case ',':
-        return (screen == Screen::Playing) ? Action::VolDown : Action::None;
+        return Action::VolDown;   // left  = decrease
+      case '/':
+        return Action::VolUp;     // right = increase
       case '[':
         return Action::SeekBack;
       case ']':
@@ -50,6 +53,7 @@ Action Input::poll(Screen screen) {
       case 's':
       case 'S':
         return Action::Settings;
+      // Optional extras still work
       case '=':
       case '+':
         return Action::VolUp;
