@@ -10,8 +10,7 @@ static constexpr const char* kNs = "mp3player";
 #endif
 
 void Settings::load() {
-  speakerVol_ = cfg::kDefaultSpeakerVolumePercent;
-  hpVol_ = cfg::kDefaultHpVolumePercent;
+  volume_ = cfg::kDefaultVolumePercent;
   route_ = OutputRoute::Speaker;
   brightness_ = cfg::kDisplayBrightness;
   displayTimeoutMs_ = cfg::kDisplayTimeoutMs;
@@ -23,8 +22,12 @@ void Settings::load() {
   if (!prefs.begin(kNs, true)) {
     return;
   }
-  speakerVol_ = prefs.getInt("volSpk", speakerVol_);
-  hpVol_ = prefs.getInt("volHp", hpVol_);
+  // Prefer new single "vol"; fall back to old volSpk if present.
+  if (prefs.isKey("vol")) {
+    volume_ = prefs.getInt("vol", volume_);
+  } else if (prefs.isKey("volSpk")) {
+    volume_ = prefs.getInt("volSpk", volume_);
+  }
   route_ = prefs.getUChar("route", 0) ? OutputRoute::Headphone : OutputRoute::Speaker;
   brightness_ = prefs.getUChar("bright", brightness_);
   displayTimeoutMs_ = prefs.getUInt("timeout", displayTimeoutMs_);
@@ -32,10 +35,8 @@ void Settings::load() {
   themeIndex_ = static_cast<size_t>(prefs.getUChar("theme", 0));
   prefs.end();
 
-  if (speakerVol_ < 0) speakerVol_ = 0;
-  if (speakerVol_ > 100) speakerVol_ = 100;
-  if (hpVol_ < 0) hpVol_ = 0;
-  if (hpVol_ > 100) hpVol_ = 100;
+  if (volume_ < 0) volume_ = 0;
+  if (volume_ > 100) volume_ = 100;
   if (themeIndex_ >= themes::kCount) themeIndex_ = 0;
 #endif
 }
@@ -43,8 +44,7 @@ void Settings::load() {
 void Settings::save() const {
 #ifndef UNIT_TEST
   if (!prefs.begin(kNs, false)) return;
-  prefs.putInt("volSpk", speakerVol_);
-  prefs.putInt("volHp", hpVol_);
+  prefs.putInt("vol", volume_);
   prefs.putUChar("route", route_ == OutputRoute::Headphone ? 1 : 0);
   prefs.putUChar("bright", brightness_);
   prefs.putUInt("timeout", displayTimeoutMs_);
@@ -56,8 +56,7 @@ void Settings::save() const {
 
 SettingsSnapshot Settings::snapshot() const {
   SettingsSnapshot s{};
-  s.speakerVolume = speakerVol_;
-  s.hpVolume = hpVol_;
+  s.volumePercent = volume_;
   s.route = route_;
   s.brightness = brightness_;
   s.displayTimeoutMs = displayTimeoutMs_;
@@ -67,20 +66,13 @@ SettingsSnapshot Settings::snapshot() const {
   return s;
 }
 
-void Settings::setSpeakerVolume(int v) {
+void Settings::setVolumePercent(int v) {
   if (v < 0) v = 0;
   if (v > 100) v = 100;
-  speakerVol_ = v;
+  volume_ = v;
 }
 
-void Settings::setHpVolume(int v) {
-  if (v < 0) v = 0;
-  if (v > 100) v = 100;
-  hpVol_ = v;
-}
-
-void Settings::adjustSpeakerVolume(int delta) { setSpeakerVolume(speakerVol_ + delta); }
-void Settings::adjustHpVolume(int delta) { setHpVolume(hpVol_ + delta); }
+void Settings::adjustVolume(int delta) { setVolumePercent(volume_ + delta); }
 
 void Settings::setRoute(OutputRoute r) { route_ = r; }
 
@@ -138,11 +130,10 @@ const char* Settings::label(size_t index) const {
   switch (index) {
     case 0: return "Theme";
     case 1: return "Output";
-    case 2: return "Vol spk";
-    case 3: return "Vol HP";
-    case 4: return "Brightness";
-    case 5: return "Scr timeout";
-    case 6: return "Auto-next";
+    case 2: return "Volume";
+    case 3: return "Brightness";
+    case 4: return "Scr timeout";
+    case 5: return "Auto-next";
     default: return "?";
   }
 }
@@ -157,23 +148,20 @@ void Settings::formatValue(size_t index, char* buf, size_t cap) const {
       snprintf(buf, cap, "%s", route_ == OutputRoute::Headphone ? "HP" : "Spk");
       break;
     case 2:
-      snprintf(buf, cap, "%d%%", speakerVol_);
+      snprintf(buf, cap, "%d%%", volume_);
       break;
     case 3:
-      snprintf(buf, cap, "%d%%", hpVol_);
-      break;
-    case 4:
       snprintf(buf, cap, "%d%%",
                static_cast<int>((static_cast<int>(brightness_) * 100 + 127) / 255));
       break;
-    case 5:
+    case 4:
       if (displayTimeoutMs_ == 0) {
         snprintf(buf, cap, "never");
       } else {
         snprintf(buf, cap, "%lus", static_cast<unsigned long>(displayTimeoutMs_ / 1000));
       }
       break;
-    case 6:
+    case 5:
       snprintf(buf, cap, "%s", autoNext_ ? "ON" : "OFF");
       break;
     default:

@@ -126,9 +126,8 @@ Authoritative map (matches firmware `src/input.cpp`):
 | Item | Left `,` / Right `/` |
 |------|----------------------|
 | Theme | Phosphor / Amber / Cyan / Paper |
-| Output | **Spk** or **HP** volume profile (also key `H`) |
-| Vol spk | speaker volume − / + 5% |
-| Vol HP | 3.5 mm / quieter profile − / + 5% |
+| Output | **Spk** or **HP** (HP applies quieter coeff; key `H`) |
+| Volume | single 0–100% for both (HP is attenuated) |
 | Brightness | dimmer / brighter |
 | Scr timeout | cycle 5s → 10s → 30s → 60s → never |
 | Auto-next | toggle ON / OFF |
@@ -140,9 +139,9 @@ Authoritative map (matches firmware `src/input.cpp`):
 | `Enter` | Toggle timeout / auto-next |
 | `Backspace` / `S` | Save & exit |
 
-**Important:** the 3.5 mm jack mutes the speaker in **hardware** (MOSFET on AMP_EN). The ESP32 has **no jack-detect GPIO**, so volume profiles do not auto-switch on plug-in. Press **`H`** (or Settings → **Output**) when you plug/unplug headphones.
+**Important:** the 3.5 mm jack mutes the speaker in **hardware** (MOSFET on AMP_EN). The ESP32 has **no jack-detect GPIO**, so volume profiles do not auto-switch on plug-in. Press **`H`** (or Settings → **Output**) for the quieter headphone profile.
 
-Volumes are **separate per output** and saved: **Vol spk** (speaker) and **Vol HP** (jack). During playback `,` / `/` adjusts the **active** output only; the Now Playing screen shows `Vol HP n%` while the jack is in. Settings are stored in **NVS** and restored on boot.
+There is **one Volume** (0–100). In **HP** mode the same number is quieter (digital × `kHpAttenPercent` = 40% before the volume curve). Example: UI **50** → speaker ~normal, HP much softer. Settings stored in **NVS**.
 
 Starting another file from Browse replaces the current track. When a track ends, the
 next audio file in the **same folder** auto-plays; if none remain, status shows `DONE`.

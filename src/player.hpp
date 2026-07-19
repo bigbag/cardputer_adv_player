@@ -20,21 +20,16 @@ class Player {
   bool open(const char* absPath);
   void stop();
   void togglePause();
-  void setSpeakerVolume(int p);
-  void setHpVolume(int p);
-  void adjustSpeakerVolume(int delta);
-  void adjustHpVolume(int delta);
-  int speakerVolume() const;
-  int hpVolume() const;
-  void setVolumePercent(int p);  // current route (kept for compat)
-  void adjustVolume(int deltaPercent);  // current route
+  void setVolumePercent(int p);
+  void adjustVolume(int deltaPercent);
+  int volumePercent() const { return volume_; }
   void seekRelative(int deltaSeconds);
   void service();
   void setAutoNext(bool on) { autoNextEnabled_ = on; }
+  bool autoNext() const { return autoNextEnabled_; }
   void setRoute(OutputRoute r);
   OutputRoute route() const;
   void toggleRoute();
-  bool autoNext() const { return autoNextEnabled_; }
   PlayerSnapshot snapshot() const;
   bool takeError(char* buf, size_t cap);
 
@@ -60,7 +55,6 @@ class Player {
   std::atomic<bool> paused_{false};
   std::atomic<int32_t> seekDeltaMs_{0};
   std::atomic<bool> autoNextPending_{false};
-  // PCM buffer lives with the task (not on loopTask stack).
   int16_t pcmBuf_[512 * 2]{};
 #endif
 
@@ -71,7 +65,6 @@ class Player {
   char currentPath_[cfg::kMaxPathLen]{};
   char currentName_[cfg::kMaxNameLen]{};
   char lastError_[48]{};
-  int speakerVol_ = cfg::kDefaultSpeakerVolumePercent;
-  int hpVol_ = cfg::kDefaultHpVolumePercent;
+  int volume_ = cfg::kDefaultVolumePercent;
   bool autoNextEnabled_ = true;
 };

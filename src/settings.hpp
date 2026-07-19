@@ -11,12 +11,9 @@ class Settings {
 
   SettingsSnapshot snapshot() const;
 
-  int speakerVolume() const { return speakerVol_; }
-  int hpVolume() const { return hpVol_; }
-  void setSpeakerVolume(int v);
-  void setHpVolume(int v);
-  void adjustSpeakerVolume(int delta);
-  void adjustHpVolume(int delta);
+  int volumePercent() const { return volume_; }
+  void setVolumePercent(int v);
+  void adjustVolume(int delta);
 
   OutputRoute route() const { return route_; }
   void setRoute(OutputRoute r);
@@ -38,8 +35,8 @@ class Settings {
   void cycleTheme(int delta);
   const Theme& theme() const { return themes::get(themeIndex_); }
 
-  // Theme, Output, Vol spk, Vol HP, Brightness, Scr timeout, Auto-next
-  static constexpr size_t kCount = 7;
+  // Theme, Output, Volume, Brightness, Scr timeout, Auto-next
+  static constexpr size_t kCount = 6;
   size_t cursor() const { return cursor_; }
   void moveCursor(int delta);
 
@@ -47,8 +44,7 @@ class Settings {
   const char* label(size_t index) const;
 
  private:
-  int speakerVol_ = 70;
-  int hpVol_ = 40;
+  int volume_ = 50;
   OutputRoute route_ = OutputRoute::Speaker;
   uint8_t brightness_ = 128;
   uint32_t displayTimeoutMs_ = 10000;

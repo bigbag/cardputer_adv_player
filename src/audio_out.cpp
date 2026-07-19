@@ -8,8 +8,8 @@
 
 static constexpr i2s_port_t kI2sPort = I2S_NUM_0;
 
-// M5Unified::_speaker_enabled_cb_cardputer_adv (exact sequence).
-// DAC 0xBF = ±0 dB. Amp mute on jack insert is hardware (MOSFET Q4).
+// M5Unified Cardputer-ADV speaker enable (DAC 0xBF = ±0 dB).
+// Jack mutes speaker amp in hardware (MOSFET); no MCU detect pin.
 static const uint8_t kEs8311InitSeq[][2] = {
     {0x00, 0x80},
     {0x01, 0xB5},
@@ -37,7 +37,7 @@ bool AudioOut::esInitRegisters() {
   return true;
 }
 
-// Keep DAC near 0 dB; fine loudness via softScale (M5 master_volume^2 style).
+// DAC stays near 0 dB; loudness is softScale (M5-style).
 uint8_t AudioOut::esDacRegFromPercent(int percent) {
   if (percent <= 0) return 0x00;
   if (percent > 100) percent = 100;
@@ -45,24 +45,35 @@ uint8_t AudioOut::esDacRegFromPercent(int percent) {
   return static_cast<uint8_t>(reg);
 }
 
-int AudioOut::effectiveVolumePercent() const {
-  const int v = activeVolume();
-  if (v <= 0) return 0;
-  // Amplitude ∝ volume² (same idea as M5Unified Speaker_Class).
-  const int sq = (v * v) / 100;
-  return sq < 1 ? 1 : sq;
+// UI volume → digital amplitude %.
+// 1) optional HP attenuation coefficient
+// 2) square curve (comfortable low end, M5-like)
+int AudioOut::softScaleFromUi() const {
+  int v = volume_;
+  if (v < 0) v = 0;
+  if (v > 100) v = 100;
+  if (v == 0) return 0;
+
+  if (route_ == OutputRoute::Headphone) {
+    // Same UI number, quieter on jack: Vol 50 → 20 before square.
+    v = (v * cfg::kHpAttenPercent) / 100;
+    if (v < 1) v = 1;
+  }
+
+  int sq = (v * v) / 100;
+  if (sq < 1) sq = 1;
+  return sq;
 }
 
 void AudioOut::applyVolume() {
-  const int ui = activeVolume();
-  const int eff = effectiveVolumePercent();
-  const uint8_t dac = esDacRegFromPercent(ui);
+  softScale_ = softScaleFromUi();
+  // DAC tracks UI volume lightly (not the attenuated path).
+  const uint8_t dac = esDacRegFromPercent(volume_);
   esWrite(0x32, dac);
-  softScale_ = eff;
 
-  Serial.printf("[audio] route=%s ui=%d%% soft=%d%% dac=0x%02X\n",
-                route_ == OutputRoute::Headphone ? "HP" : "SPK", ui, softScale_,
-                dac);
+  Serial.printf("[audio] route=%s ui=%d%% soft=%d%% dac=0x%02X hpAtten=%d\n",
+                route_ == OutputRoute::Headphone ? "HP" : "SPK", volume_,
+                softScale_, dac, cfg::kHpAttenPercent);
 }
 
 bool AudioOut::i2sStart(uint32_t rate) {
@@ -107,9 +118,6 @@ void AudioOut::i2sStop() {
 }
 
 bool AudioOut::begin() {
-  // Do NOT drive G46 — schematic ties it to ES8311 ASDOUT (mic ADC).
-  // Amp enable is hardware (jack MOSFET), not software.
-
   Wire.begin(cfg::kI2cSda, cfg::kI2cScl, 100000);
   delay(10);
 
@@ -119,12 +127,11 @@ bool AudioOut::begin() {
   }
   if (!i2sStart(cfg::kDefaultSampleRate)) return false;
 
-  speakerVol_ = cfg::kDefaultSpeakerVolumePercent;
-  hpVol_ = cfg::kDefaultHpVolumePercent;
+  volume_ = cfg::kDefaultVolumePercent;
   route_ = OutputRoute::Speaker;
   applyVolume();
   ready_ = true;
-  Serial.println("[audio] ready (route=SPK; press H to switch HP profile)");
+  Serial.println("[audio] ready — H toggles HP quieter profile");
   return true;
 }
 
@@ -142,36 +149,23 @@ bool AudioOut::setSampleRate(uint32_t hz) {
   return true;
 }
 
-void AudioOut::setSpeakerVolume(int percent) {
-  if (percent < 0) percent = 0;
-  if (percent > 100) percent = 100;
-  speakerVol_ = percent;
-  if (ready_ && route_ == OutputRoute::Speaker) applyVolume();
-}
-
-void AudioOut::setHpVolume(int percent) {
-  if (percent < 0) percent = 0;
-  if (percent > 100) percent = 100;
-  hpVol_ = percent;
-  if (ready_ && route_ == OutputRoute::Headphone) applyVolume();
-}
-
 void AudioOut::setVolumePercent(int percent) {
-  if (route_ == OutputRoute::Headphone) {
-    setHpVolume(percent);
-  } else {
-    setSpeakerVolume(percent);
-  }
+  if (percent < 0) percent = 0;
+  if (percent > 100) percent = 100;
+  volume_ = percent;
+  if (ready_) applyVolume();
 }
-
-int AudioOut::volumePercent() const { return activeVolume(); }
 
 void AudioOut::setRoute(OutputRoute r) {
-  if (r == route_) return;
+  if (r == route_) {
+    if (ready_) applyVolume();
+    return;
+  }
   route_ = r;
   if (ready_) applyVolume();
-  Serial.printf("[audio] output profile → %s\n",
-                route_ == OutputRoute::Headphone ? "HP" : "SPK");
+  Serial.printf("[audio] profile → %s (same UI vol, HP×%d%%)\n",
+                route_ == OutputRoute::Headphone ? "HP" : "SPK",
+                cfg::kHpAttenPercent);
 }
 
 void AudioOut::toggleRoute() {

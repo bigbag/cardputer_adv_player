@@ -47,9 +47,11 @@ constexpr size_t kMaxPathLen = 256;
 constexpr size_t kMaxNameLen = 64;
 constexpr int kVolumeStepPercent = 5;
 constexpr int kSeekStepSeconds = 5;
-// Defaults for separate output paths (also used when NVS is empty).
-constexpr int kDefaultSpeakerVolumePercent = 70;
-constexpr int kDefaultHpVolumePercent = 40;
+// Single UI volume (0..100). Headphone profile applies kHpAttenPercent.
+constexpr int kDefaultVolumePercent = 50;
+// When Output=HP, digital level is scaled by this percent of speaker level.
+// e.g. Vol 50 → speaker 50%, HP ≈ 50 * 40 / 100 = 20% amplitude (before vol^2).
+constexpr int kHpAttenPercent = 40;
 constexpr uint32_t kToastMs = 1500;
 
 // Audio task / buffers

@@ -39,9 +39,8 @@ struct Toast {
 };
 
 struct SettingsSnapshot {
-  int speakerVolume;
-  int hpVolume;
-  OutputRoute route;
+  int volumePercent;
+  OutputRoute route;  // Spk vs HP gain profile (manual; no MCU jack sense)
   uint8_t brightness;
   uint32_t displayTimeoutMs;  // 0 = never
   bool autoNext;

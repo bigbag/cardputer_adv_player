@@ -10,16 +10,10 @@ class AudioOut {
   void end();
   bool setSampleRate(uint32_t hz);
 
-  // Active route volume (depends on setRoute).
+  // Single UI volume 0..100. HP route applies kHpAttenPercent automatically.
   void setVolumePercent(int percent);
-  int volumePercent() const;
+  int volumePercent() const { return volume_; }
 
-  void setSpeakerVolume(int percent);
-  void setHpVolume(int percent);
-  int speakerVolume() const { return speakerVol_; }
-  int hpVolume() const { return hpVol_; }
-
-  // Software output profile — jack mute is hardware; we only switch gain.
   void setRoute(OutputRoute r);
   OutputRoute route() const { return route_; }
   void toggleRoute();
@@ -33,16 +27,12 @@ class AudioOut {
   bool i2sStart(uint32_t rate);
   void i2sStop();
   void applyVolume();
-  int effectiveVolumePercent() const;
+  int softScaleFromUi() const;
   static uint8_t esDacRegFromPercent(int percent);
-  int activeVolume() const {
-    return route_ == OutputRoute::Headphone ? hpVol_ : speakerVol_;
-  }
 
   uint32_t rate_ = 0;
-  int speakerVol_ = 70;
-  int hpVol_ = 40;
+  int volume_ = 50;
   OutputRoute route_ = OutputRoute::Speaker;
   bool ready_ = false;
-  int softScale_ = 100;  // 0..100 amplitude after vol^2 curve
+  int softScale_ = 100;  // 0..100 applied in write()
 };

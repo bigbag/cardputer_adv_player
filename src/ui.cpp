@@ -83,8 +83,7 @@ bool Ui::playerChanged(const PlayerSnapshot& p) const {
 bool Ui::settingsChanged(const Settings& s) const {
   if (!hasLastSettings_) return true;
   SettingsSnapshot cur = s.snapshot();
-  return cur.speakerVolume != lastSettings_.speakerVolume ||
-         cur.hpVolume != lastSettings_.hpVolume ||
+  return cur.volumePercent != lastSettings_.volumePercent ||
          cur.route != lastSettings_.route ||
          cur.brightness != lastSettings_.brightness ||
          cur.displayTimeoutMs != lastSettings_.displayTimeoutMs ||
@@ -380,7 +379,7 @@ void Ui::drawPlaying(const PlayerSnapshot& p, bool full) {
   if (full || p.volumePercent != lastPlayer_.volumePercent) {
     d.fillRect(0, 74, 110, 12, theme_.bg);
     char volBuf[16];
-    snprintf(volBuf, sizeof(volBuf), "Vol %s%d%%", (p.route == OutputRoute::Headphone) ? "HP " : "Spk ", p.volumePercent);
+    snprintf(volBuf, sizeof(volBuf), "%s %d%%", (p.route == OutputRoute::Headphone) ? "HP" : "Spk", p.volumePercent);
     d.drawString(volBuf, 4, 74);
   }
 

@@ -9,8 +9,7 @@ bool Player::begin(AudioOut* out, SdBrowser* browser) {
   out_ = out;
   browser_ = browser;
   state_ = PlayState::Idle;
-  speakerVol_ = cfg::kDefaultSpeakerVolumePercent;
-  hpVol_ = cfg::kDefaultHpVolumePercent;
+  volume_ = cfg::kDefaultVolumePercent;
   return true;
 }
 
@@ -120,8 +119,7 @@ void Player::audioTaskMain() {
   }
 
   out_->setSampleRate(fmt.sampleRate);
-  out_->setSpeakerVolume(speakerVol_);
-  out_->setHpVolume(hpVol_);
+  out_->setVolumePercent(volume_);
   state_ = PlayState::Playing;
 
   constexpr size_t kBufFrames = 512;
@@ -195,39 +193,15 @@ void Player::seekRelative(int) {}
 
 #endif
 
-void Player::setSpeakerVolume(int p) {
-  if (p < 0) p = 0;
-  if (p > 100) p = 100;
-  speakerVol_ = p;
-  if (out_) out_->setSpeakerVolume(p);
-}
-
-void Player::setHpVolume(int p) {
-  if (p < 0) p = 0;
-  if (p > 100) p = 100;
-  hpVol_ = p;
-  if (out_) out_->setHpVolume(p);
-}
-
-void Player::adjustSpeakerVolume(int delta) { setSpeakerVolume(speakerVol_ + delta); }
-void Player::adjustHpVolume(int delta) { setHpVolume(hpVol_ + delta); }
-int Player::speakerVolume() const { return speakerVol_; }
-int Player::hpVolume() const { return hpVol_; }
-
 void Player::setVolumePercent(int p) {
-  if (out_ && out_->route() == OutputRoute::Headphone) {
-    setHpVolume(p);
-  } else {
-    setSpeakerVolume(p);
-  }
+  if (p < 0) p = 0;
+  if (p > 100) p = 100;
+  volume_ = p;
+  if (out_) out_->setVolumePercent(volume_);
 }
 
 void Player::adjustVolume(int deltaPercent) {
-  if (out_ && out_->route() == OutputRoute::Headphone) {
-    adjustHpVolume(deltaPercent);
-  } else {
-    adjustSpeakerVolume(deltaPercent);
-  }
+  setVolumePercent(volume_ + deltaPercent);
 }
 
 void Player::setRoute(OutputRoute r) {
@@ -241,6 +215,7 @@ OutputRoute Player::route() const {
 void Player::toggleRoute() {
   if (out_) out_->toggleRoute();
 }
+
 
 void Player::service() {
 #ifndef UNIT_TEST
@@ -267,9 +242,8 @@ PlayerSnapshot Player::snapshot() const {
   s.state = state_;
   std::strncpy(s.fileName, currentName_, cfg::kMaxNameLen - 1);
   s.fileName[cfg::kMaxNameLen - 1] = '\0';
-  const bool hp = out_ && out_->route() == OutputRoute::Headphone;
-  s.volumePercent = hp ? hpVol_ : speakerVol_;
-  s.route = hp ? OutputRoute::Headphone : OutputRoute::Speaker;
+  s.volumePercent = volume_;
+  s.route = out_ ? out_->route() : OutputRoute::Speaker;
   if (decoder_) {
     s.positionMs = decoder_->positionMs();
     AudioFormat fmt = decoder_->format();
