@@ -153,6 +153,9 @@ On boot, behavior follows **On boot**: **play** restores and starts the last tra
 The Browser also remembers its last folder and highlighted entry independently of the
 last played track. This location is restored after reboot and when returning from Now
 Playing. If its folder or highlighted item no longer exists, Browser safely opens root `/`.
+Within the current browsing session, Back restores the parent folder’s selected entry and
+list viewport from immediately before that folder was opened; this navigation history is
+not retained after reboot.
 
 Starting another file from Browse replaces the current track. When a track ends, the
 next audio file in the **same folder** auto-plays; if none remain, status shows `DONE`.
@@ -174,21 +177,22 @@ next audio file in the **same folder** auto-plays; if none remain, status shows 
 
 1. Boot with no SD → clear “No SD” UI; Enter retries
 2. Nested folders; parent at root stays root
-3. Play MP3 44.1 kHz and 48 kHz if available
-4. Play 16-bit WAV mono/stereo
-5. Reject bad/non-PCM WAV with toast
-6. Pause / resume, volume, seek, next/prev track
-7. Auto-next within folder; last file → DONE
-8. Backspace or **P** toggles Browse ↔ Playing while audio continues; open new file switches track
-9. Headphone jack mutes speaker amp
-10. Settings survive reboot (`/.asvmp3/config.cfg`)
-11. Nested Browser folder and highlighted entry survive reboot
-12. **On boot = play** starts last track; Back / **P** returns to saved Browser location
-13. **On boot = browse** and **off** restore Browser without playback
-14. Browsing elsewhere does not change the player next/prev/auto-next folder
-15. Removed Browser folder or item restores root `/`
-16. Missing Browser config keys restore root `/`
-17. Serial 115200 shows mount/open/errors
+3. Enter nested folders after moving the cursor and scrolling each parent; Back restores each parent’s prior selected entry and viewport. Reboot does not retain this Back history.
+4. Play MP3 44.1 kHz and 48 kHz if available
+5. Play 16-bit WAV mono/stereo
+6. Reject bad/non-PCM WAV with toast
+7. Pause / resume, volume, seek, next/prev track
+8. Auto-next within folder; last file → DONE
+9. Backspace or **P** toggles Browse ↔ Playing while audio continues; open new file switches track
+10. Headphone jack mutes speaker amp
+11. Settings survive reboot (`/.asvmp3/config.cfg`)
+12. Nested Browser folder and highlighted entry survive reboot
+13. **On boot = play** starts last track; Back / **P** returns to saved Browser location
+14. **On boot = browse** and **off** restore Browser without playback
+15. Browsing elsewhere does not change the player next/prev/auto-next folder
+16. Removed Browser folder or item restores root `/`
+17. Missing Browser config keys restore root `/`
+18. Serial 115200 shows mount/open/errors
 
 **Hardware validation status:** host tests and firmware build pass; full on-device
 checklist not yet signed off in this environment.

@@ -59,6 +59,7 @@ bool SdBrowser::begin() {
   };
 
   sdOk_ = false;
+  history_.clear();
   for (uint32_t hz : kSpeeds) {
     SD.end();
     delay(20);
@@ -214,27 +215,59 @@ bool SdBrowser::listCurrentArduino() {
 
 bool SdBrowser::enter(const char* name) {
   if (!name) return false;
-  char newPath[cfg::kMaxPathLen];
-  if (!path::join(newPath, sizeof(newPath), path_, name)) return false;
-  std::strncpy(path_, newPath, cfg::kMaxPathLen - 1);
-  path_[cfg::kMaxPathLen - 1] = '\0';
-  return listCurrent();
+
+  char childPath[cfg::kMaxPathLen];
+  if (!path::join(childPath, sizeof(childPath), path_, name)) return false;
+
+  char parentPath[cfg::kMaxPathLen];
+  std::strncpy(parentPath, path_, sizeof(parentPath) - 1);
+  parentPath[sizeof(parentPath) - 1] = '\0';
+  const size_t parentCursor = cursor_;
+  const size_t parentScroll = scroll_;
+
+  if (!openPathInternal(childPath, false)) return false;
+  history_.push(parentPath, parentCursor, parentScroll);
+  return true;
 }
 
 bool SdBrowser::up() {
+  BrowserHistoryFrame frame{};
+  if (history_.peek(&frame)) {
+    if (!openPathInternal(frame.path, false)) return false;
+    restoreListPosition(frame.cursor, frame.scroll);
+    history_.discardTop();
+    return true;
+  }
+
   if (std::strcmp(path_, "/") == 0) return false;
-  char newPath[cfg::kMaxPathLen];
-  path::parent(newPath, sizeof(newPath), path_);
-  std::strncpy(path_, newPath, cfg::kMaxPathLen - 1);
-  path_[cfg::kMaxPathLen - 1] = '\0';
-  return listCurrent();
+  char parentPath[cfg::kMaxPathLen];
+  path::parent(parentPath, sizeof(parentPath), path_);
+  return openPathInternal(parentPath, false);
+}
+
+bool SdBrowser::openPathInternal(const char* absPath, bool clearHistory) {
+  if (!isAbsolutePath(absPath)) return false;
+
+  char oldPath[cfg::kMaxPathLen];
+  std::strncpy(oldPath, path_, sizeof(oldPath) - 1);
+  oldPath[sizeof(oldPath) - 1] = '\0';
+  const size_t oldCursor = cursor_;
+  const size_t oldScroll = scroll_;
+
+  std::strncpy(path_, absPath, sizeof(path_) - 1);
+  path_[sizeof(path_) - 1] = '\0';
+  if (!listCurrent()) {
+    std::strncpy(path_, oldPath, sizeof(path_) - 1);
+    path_[sizeof(path_) - 1] = '\0';
+    if (listCurrent()) restoreListPosition(oldCursor, oldScroll);
+    return false;
+  }
+  if (clearHistory) history_.clear();
+  return true;
 }
 
 bool SdBrowser::openPath(const char* absPath) {
-  if (!absPath || absPath[0] != '/') return false;
-  std::strncpy(path_, absPath, cfg::kMaxPathLen - 1);
-  path_[cfg::kMaxPathLen - 1] = '\0';
-  return listCurrent();
+  return openPathInternal(absPath, true);
 }
 
 const char* SdBrowser::path() const { return path_; }
@@ -288,7 +321,7 @@ bool SdBrowser::revealPath(const char* absPath) {
   path::fileName(name, sizeof(name), absPath);
   if (name[0] == '\0') return false;
 
-  if (!openPath(dir)) return false;
+  if (!openPathInternal(dir, false)) return false;
   for (size_t i = 0; i < count_; ++i) {
     if (std::strcmp(entries_[i].name, name) == 0) {
       setCursor(i);
@@ -318,6 +351,12 @@ bool SdBrowser::prevAudioBefore(const char* fileName, char* outPath, size_t outC
   return false;
 }
 
+void SdBrowser::restoreListPosition(size_t cursor, size_t scroll) {
+  BrowserHistory::clampPosition(count_, cfg::kMaxVisibleRows, &cursor, &scroll);
+  cursor_ = cursor;
+  scroll_ = scroll;
+}
+
 BrowserLocation SdBrowser::location() const {
   BrowserLocation out{};
   std::strncpy(out.path, path_, sizeof(out.path) - 1);
@@ -327,17 +366,19 @@ BrowserLocation SdBrowser::location() const {
   return out;
 }
 
-bool SdBrowser::restoreLocation(const BrowserLocation& location) {
+bool SdBrowser::restoreLocationInternal(const BrowserLocation& location,
+                                        bool clearHistory) {
   auto restoreRoot = [&]() {
-    openPath("/");
+    openPathInternal("/", clearHistory);
     return false;
   };
 
   // Empty path is the legacy/no-location default and validly restores root.
   if (location.path[0] == '\0') {
-    return openPath("/");
+    return openPathInternal("/", clearHistory);
   }
-  if (!isAbsolutePath(location.path) || !openPath(location.path)) {
+  if (!isAbsolutePath(location.path) ||
+      !openPathInternal(location.path, clearHistory)) {
     return restoreRoot();
   }
 
@@ -353,6 +394,17 @@ bool SdBrowser::restoreLocation(const BrowserLocation& location) {
     }
   }
   return restoreRoot();
+}
+
+bool SdBrowser::restoreLocation(const BrowserLocation& location) {
+  return restoreLocationInternal(location, true);
+}
+
+bool SdBrowser::restoreLocationPreservingHistory(const BrowserLocation& location) {
+  const bool restored = restoreLocationInternal(location, false);
+  // A failed temporary restore falls back to root, making saved frames stale.
+  if (!restored) history_.clear();
+  return restored;
 }
 
 BrowseSnapshot SdBrowser::snapshot() const {

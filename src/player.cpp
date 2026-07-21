@@ -232,7 +232,7 @@ bool Player::adjacentTrack(bool next, char* outPath, size_t outCap) {
     found = next ? browser_->nextAudioAfter(currentName_, outPath, outCap)
                  : browser_->prevAudioBefore(currentName_, outPath, outCap);
   }
-  browser_->restoreLocation(visibleLocation);
+  browser_->restoreLocationPreservingHistory(visibleLocation);
   return found;
 }
 

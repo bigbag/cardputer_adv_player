@@ -1,5 +1,6 @@
 #pragma once
 #include "types.hpp"
+#include "browser_history.hpp"
 
 class SdBrowser {
  public:
@@ -26,9 +27,14 @@ class SdBrowser {
   BrowserLocation location() const;
   // Restore folder and selected entry. Missing folder/item resets to root.
   bool restoreLocation(const BrowserLocation& location);
+  // Restore a temporary lookup’s visible list without clearing session history.
+  bool restoreLocationPreservingHistory(const BrowserLocation& location);
   BrowseSnapshot snapshot() const;
 
  private:
+  bool openPathInternal(const char* absPath, bool clearHistory);
+  bool restoreLocationInternal(const BrowserLocation& location, bool clearHistory);
+  void restoreListPosition(size_t cursor, size_t scroll);
   bool sdOk_ = false;
   char path_[cfg::kMaxPathLen] = "/";
   DirEntry entries_[cfg::kMaxDirEntries];
@@ -36,6 +42,7 @@ class SdBrowser {
   bool truncated_ = false;
   size_t cursor_ = 0;
   size_t scroll_ = 0;
+  BrowserHistory history_;
   void sortEntries();
   void ensureScroll();
   bool listCurrentArduino();  // slow fallback
