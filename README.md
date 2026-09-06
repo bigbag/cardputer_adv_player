@@ -146,12 +146,13 @@ Rows (change with `,` / `/`):
 - **Scr timeout** — 5s / 10s / 30s / 60s / never
 - **Auto-next** — ON / OFF
 - **On boot** — play (auto-play last track) / browse (open folder only, default) / off (ignore last path)
+- **Idle off** — never / 5m / 30m / 60m (default: never)
 
 Keys:
 
 - **`;` / `.`** — Move row
 - **`,` / `/`** — Decrease / increase
-- **`Enter` / `Space`** — Cycle theme / timeout / auto-next / on boot
+- **`Enter` / `Space`** — Cycle theme / screen timeout / auto-next / on boot / idle off
 - **`Backspace` / `S`** — Exit (values already auto-saved on each change)
 
 Jack mutes the speaker in **hardware**. There is **one Volume** with a wide range: use
@@ -177,6 +178,17 @@ next audio file in the **same folder** auto-plays; if none remain, status shows 
   playing). Default 10 s; set to **never** in Settings if you prefer.
 - Any key wakes the screen; the same key is also handled normally.
 - Playing screen updates the time/progress bar without full-screen redraws (less blink).
+
+## Idle shutdown
+
+- **Idle off** sets a separate timeout for deep sleep.
+- Commands restart the idle timer. Playback prevents shutdown on every screen.
+- Pausing or ending playback starts a full idle interval. Playback errors also restart it.
+- The player saves settings before shutdown. If the save fails, it stays awake and shows an error.
+- The config key is `idle_timeout_ms`: `0`, `300000`, `1800000`, or `3600000`.
+  Missing or invalid values select **never**.
+- Deep sleep does not disconnect the battery. Reset or power-cycle the device to return.
+  Keyboard wake is not enabled. Sleep current requires a hardware measurement.
 
 ## Audio notes
 

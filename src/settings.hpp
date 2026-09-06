@@ -25,6 +25,9 @@ class Settings {
   uint32_t displayTimeoutMs() const { return displayTimeoutMs_; }
   void cycleDisplayTimeout();
 
+  uint32_t idleTimeoutMs() const { return idleTimeoutMs_; }
+  void cycleIdleTimeout(int delta);
+
   bool autoNext() const { return autoNext_; }
   void setAutoNext(bool on);
   void toggleAutoNext();
@@ -45,7 +48,7 @@ class Settings {
   const BrowserLocation& browserLocation() const { return browserLocation_; }
   void setBrowserLocation(const BrowserLocation& location);
 
-  static constexpr size_t kCount = 6;
+  static constexpr size_t kCount = 7;
   size_t cursor() const { return cursor_; }
   void moveCursor(int delta);
 
@@ -63,6 +66,7 @@ class Settings {
   int volume_ = 45;
   uint8_t brightness_ = 128;
   uint32_t displayTimeoutMs_ = 10000;
+  uint32_t idleTimeoutMs_ = 0;
   bool autoNext_ = true;
   OnBootMode onBoot_ = OnBootMode::Browse;
   size_t themeIndex_ = 0;

@@ -7,6 +7,7 @@
 #include "input.hpp"
 #include "settings.hpp"
 #include "types.hpp"
+#include "idle_timeout.hpp"
 #include <cstdint>
 
 class App {
@@ -31,6 +32,7 @@ class App {
   void playSelection();
   void noteActivity(uint32_t nowMs);
   void updateDisplayPower(uint32_t nowMs);
+  void updateIdlePower(uint32_t nowMs, PlayState state);
 
   AudioOut audio_;
   SdBrowser browser_;
@@ -41,6 +43,7 @@ class App {
   Screen screen_ = Screen::Browse;
   Screen settingsReturn_ = Screen::Browse;
   uint32_t lastActivityMs_ = 0;
+  IdleTimeout idleTimeout_;
   bool browserLocationDirty_ = false;
   uint32_t browserLocationChangedAtMs_ = 0;
 };

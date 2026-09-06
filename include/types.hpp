@@ -45,6 +45,7 @@ struct SettingsSnapshot {
   int volumePercent;
   uint8_t brightness;
   uint32_t displayTimeoutMs;  // 0 = never
+  uint32_t idleTimeoutMs;  // 0 = never
   bool autoNext;
   OnBootMode onBoot;
   size_t themeIndex;

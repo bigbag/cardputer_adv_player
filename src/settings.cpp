@@ -4,6 +4,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <cctype>
+#include <cerrno>
 
 #include <SD.h>
 #include <FS.h>
@@ -13,11 +14,13 @@
 // Keeps a half-written file from wiping good settings.
 
 static constexpr const char* kConfigTmp = "/.asvmp3/config.cfg.tmp";
+static constexpr uint32_t kIdleTimeouts[] = {0, 300000, 1800000, 3600000};
 
 void Settings::applyDefaults() {
   volume_ = cfg::kDefaultVolumePercent;
   brightness_ = cfg::kDisplayBrightness;
   displayTimeoutMs_ = cfg::kDisplayTimeoutMs;
+  idleTimeoutMs_ = 0;
   autoNext_ = true;
   onBoot_ = OnBootMode::Browse;
   themeIndex_ = 0;
@@ -87,6 +90,17 @@ bool Settings::parseLine(const char* line) {
     brightness_ = static_cast<uint8_t>(std::atoi(val));
   } else if (std::strcmp(key, "timeout") == 0 || std::strcmp(key, "timeout_ms") == 0) {
     displayTimeoutMs_ = static_cast<uint32_t>(std::strtoul(val, nullptr, 10));
+  } else if (std::strcmp(key, "idle_timeout_ms") == 0) {
+    char* end = nullptr;
+    errno = 0;
+    const unsigned long timeout = std::strtoul(val, &end, 10);
+    idleTimeoutMs_ = 0;
+    if (errno == 0 && std::isdigit(static_cast<unsigned char>(val[0])) &&
+        end != val && *end == '\0') {
+      for (uint32_t option : kIdleTimeouts) {
+        if (timeout == option) idleTimeoutMs_ = option;
+      }
+    }
   } else if (std::strcmp(key, "autonext") == 0) {
     autoNext_ = (std::strcmp(val, "1") == 0 || std::strcmp(val, "true") == 0 ||
                  std::strcmp(val, "on") == 0 || std::strcmp(val, "yes") == 0);
@@ -256,6 +270,9 @@ bool Settings::save() {
   std::snprintf(line, sizeof(line), "timeout_ms=%lu\n",
                 static_cast<unsigned long>(displayTimeoutMs_));
   ok = ok && wr(line);
+  std::snprintf(line, sizeof(line), "idle_timeout_ms=%lu\n",
+                static_cast<unsigned long>(idleTimeoutMs_));
+  ok = ok && wr(line);
   std::snprintf(line, sizeof(line), "theme=%s\n", themes::name(themeIndex_));
   ok = ok && wr(line);
   std::snprintf(line, sizeof(line), "autonext=%s\n", autoNext_ ? "on" : "off");
@@ -333,6 +350,7 @@ SettingsSnapshot Settings::snapshot() const {
   s.volumePercent = volume_;
   s.brightness = brightness_;
   s.displayTimeoutMs = displayTimeoutMs_;
+  s.idleTimeoutMs = idleTimeoutMs_;
   s.autoNext = autoNext_;
   s.onBoot = onBoot_;
   s.themeIndex = themeIndex_;
@@ -369,6 +387,14 @@ void Settings::cycleDisplayTimeout() {
   } else {
     displayTimeoutMs_ = 5000;
   }
+}
+
+void Settings::cycleIdleTimeout(int delta) {
+  constexpr int count = sizeof(kIdleTimeouts) / sizeof(kIdleTimeouts[0]);
+  int index = 0;
+  while (index < count - 1 && kIdleTimeouts[index] != idleTimeoutMs_) ++index;
+  index = (index + (delta < 0 ? count - 1 : 1)) % count;
+  idleTimeoutMs_ = kIdleTimeouts[index];
 }
 
 void Settings::setAutoNext(bool on) { autoNext_ = on; }
@@ -412,6 +438,7 @@ const char* Settings::label(size_t index) const {
     case 3: return "Scr timeout";
     case 4: return "Auto-next";
     case 5: return "On boot";
+    case 6: return "Idle off";
     default: return "?";
   }
 }
@@ -446,6 +473,13 @@ void Settings::formatValue(size_t index, char* buf, size_t cap) const {
         snprintf(buf, cap, "off");
       } else {
         snprintf(buf, cap, "play");
+      }
+      break;
+    case 6:
+      if (idleTimeoutMs_ == 0) {
+        snprintf(buf, cap, "never");
+      } else {
+        snprintf(buf, cap, "%lum", static_cast<unsigned long>(idleTimeoutMs_ / 60000));
       }
       break;
     default:

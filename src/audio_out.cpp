@@ -141,6 +141,9 @@ bool AudioOut::begin() {
 }
 
 void AudioOut::end() {
+  if (!esWrite(0x32, 0x00)) {
+    Serial.println("[audio] DAC mute failed");
+  }
   i2sStop();
   ready_ = false;
 }

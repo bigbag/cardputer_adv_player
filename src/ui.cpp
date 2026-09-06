@@ -100,6 +100,7 @@ bool Ui::settingsChanged(const Settings& s) const {
   return cur.volumePercent != lastSettings_.volumePercent ||
          cur.brightness != lastSettings_.brightness ||
          cur.displayTimeoutMs != lastSettings_.displayTimeoutMs ||
+         cur.idleTimeoutMs != lastSettings_.idleTimeoutMs ||
          cur.autoNext != lastSettings_.autoNext ||
          cur.onBoot != lastSettings_.onBoot ||
          cur.themeIndex != lastSettings_.themeIndex ||
@@ -403,7 +404,7 @@ void Ui::drawSettings(const Settings& s) {
   d.setTextColor(theme_.fg, theme_.bg);
   d.drawString("SETTINGS", 4, 2);
 
-  const int rowH = 16;
+  const int rowH = cfg::kListRowH;
   const int startY = 18;
   for (size_t i = 0; i < Settings::kCount; ++i) {
     const int y = startY + static_cast<int>(i) * rowH;

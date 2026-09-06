@@ -42,6 +42,7 @@ void App::begin() {
   resumeLastTrack();
 
   lastActivityMs_ = millis();
+  idleTimeout_.reset(lastActivityMs_);
   ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, lastActivityMs_, true);
 }
 
@@ -128,6 +129,7 @@ void App::resumeLastTrack() {
 
 void App::noteActivity(uint32_t nowMs) {
   lastActivityMs_ = nowMs;
+  idleTimeout_.reset(nowMs);
   if (!ui_.displayOn()) {
     ui_.setDisplayOn(true);
     M5Cardputer.Display.setBrightness(settings_.brightness());
@@ -143,6 +145,24 @@ void App::updateDisplayPower(uint32_t nowMs) {
     Serial.println("[app] display off (timeout)");
     ui_.setDisplayOn(false);
   }
+}
+
+void App::updateIdlePower(uint32_t nowMs, PlayState state) {
+  if (!idleTimeout_.expired(nowMs, settings_.idleTimeoutMs(),
+                            state == PlayState::Playing)) return;
+
+  if (!settings_.save()) {
+    noteActivity(millis());
+    ui_.showToast("Save fail (SD?)", millis());
+    return;
+  }
+  browserLocationDirty_ = false;
+  player_.stop();
+  audio_.end();
+  SD.end();
+  Serial.println("[app] idle off (deep sleep)");
+  Serial.flush();
+  M5.Power.powerOff();
 }
 
 void App::loop() {
@@ -177,8 +197,10 @@ void App::loop() {
     flushBrowserLocation(false);
   }
 
-  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, now, forceUi);
+  const PlayerSnapshot player = player_.snapshot();
+  ui_.render(screen_, browser_.snapshot(), player, settings_, now, forceUi);
   updateDisplayPower(now);
+  updateIdlePower(millis(), player.state);
 
   delay(10);
 }
@@ -349,6 +371,7 @@ void App::handleSettings(Action a) {
           settings_.cycleOnBoot(+1);
           changed = true;
           break;
+        case 6: settings_.cycleIdleTimeout(+1); changed = true; break;
         default: break;
       }
       break;
@@ -384,6 +407,7 @@ void App::handleSettings(Action a) {
           settings_.cycleOnBoot(-1);
           changed = true;
           break;
+        case 6: settings_.cycleIdleTimeout(-1); changed = true; break;
         default: break;
       }
       break;
@@ -401,6 +425,7 @@ void App::handleSettings(Action a) {
           settings_.cycleOnBoot(+1);
           changed = true;
           break;
+        case 6: settings_.cycleIdleTimeout(+1); changed = true; break;
         default: break;
       }
       break;
