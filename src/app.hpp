@@ -42,6 +42,7 @@ class App {
   Input input_;
   Screen screen_ = Screen::Browse;
   Screen settingsReturn_ = Screen::Browse;
+  Screen systemReturn_ = Screen::Browse;
   uint32_t lastActivityMs_ = 0;
   IdleTimeout idleTimeout_;
   bool browserLocationDirty_ = false;

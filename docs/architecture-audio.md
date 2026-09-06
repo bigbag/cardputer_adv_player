@@ -114,9 +114,18 @@ product:
 
 ### 2.1 Modules
 
-- **`App`** (`src/app.cpp`) controls the Browse, Playing, and Settings screens.
+- **`App`** (`src/app.cpp`) controls the Browse, Playing, Settings, and System screens.
   It applies settings. It saves `last_path` and the browser location.
   It calls the `Player` controls.
+- **`Ui`** (`src/ui.cpp`) draws the screens and a shared battery widget.
+  System shows CPU, memory, uptime, SD status, and battery voltage.
+  Every five seconds with the display on, the UI starts a batch of 16 voltage
+  readings through `M5.Power`. The readings are at least 20 ms apart.
+  `BatteryReading` supplies the complete average and its estimated percentage.
+  System and the widget use the same result. A reading outside 2.0–4.5 V
+  makes that batch unavailable. Screen wake clears the previous result and batch.
+  Sampling does not wait between readings. Other System values refresh once per second.
+  These updates do not restart the activity timers or control playback.
 - **`Player`** (`src/player.cpp`) controls playback through its open, stop, pause,
   seek, next, and previous functions. It runs the FreeRTOS audio task.
   `service()` starts automatic track changes in the application loop.

@@ -128,6 +128,7 @@ This key map matches the firmware file `src/input.cpp`:
 - **`Space`** — Play the highlighted audio file
 - **`P`** — Show the Now Playing screen if the player has a track. Playback continues.
 - **`S` or `Tab`** — Settings
+- **`I`** — System information
 - **`Backspace` or `` ` ``** — Parent directory
 - **`Enter` when no SD card is present** — Retry the mount
 
@@ -145,6 +146,7 @@ This key map matches the firmware file `src/input.cpp`:
 - **`[` / `]`** — Seek back or forward approximately 5 s
 - **`P`** — Return to Browse. Playback continues.
 - **`S` or `Tab`** — Open Settings.
+- **`I`** — System information. Playback continues.
 - **`Backspace`** — Return to Browse. Playback continues.
 
 ### Settings (`S` / Tab)
@@ -167,6 +169,7 @@ Keys:
 - **`Enter` / `Space`** — Cycle theme / screen timeout / auto-next / on boot
   / idle off
 - **`Backspace` / `S`** — Exit Settings. The device saves each setting when you change it.
+- **`I`** — System information. Return to the same Settings row with **I** or **Backspace**.
 
 The jack mutes the speaker amplifier in hardware. The **Volume** setting has
 one wide range. Use low levels for headphones. Use high levels for the
@@ -194,6 +197,16 @@ track. If **Auto-next** is **ON**, the player starts the next audio file in
 the **same folder** when the current track ends. The status shows `DONE` if
 Auto-next is OFF or no next audio file exists.
 
+### System information (`I`)
+
+- Press **I** from Browse, Now Playing, or Settings.
+- Press **I**, **Backspace**, or `` ` `` to return to the previous screen.
+- The screen shows the device, CPU model, CPU frequency, core count, flash
+  size, free heap, uptime, SD mount status, and battery voltage.
+- Free heap, uptime, and SD status refresh once per second.
+  Battery voltage and percentage use the same average. They update together.
+- Playback continues. The display timeout and idle shutdown rules do not change.
+
 ## Display
 
 - The backlight turns off after the screen timeout if no mapped command occurs.
@@ -202,6 +215,22 @@ Auto-next is OFF or no next audio file exists.
 - A mapped command wakes the screen. The device also processes the command.
 - The Now Playing screen updates the time and the progress bar without a
   full-screen redraw. This reduces flicker.
+- A separate battery widget appears at the top-right of each screen.
+  It shows an icon and an estimated percentage, such as `~75%`.
+  The device starts a batch of 16 voltage readings every five seconds while the
+  display is on. Readings are at least 20 ms apart. The UI does not wait between them.
+  Each complete batch supplies one average for the widget and System.
+  After boot or screen wake, both values show `--` until a new batch completes.
+  A level change redraws only the widget when the rest of the screen does not change.
+  Long browser paths end before the widget.
+- The battery estimate comes from the M5Unified voltage reading.
+  It is not a precise measure of remaining capacity.
+  An unavailable level shows `--%`. An unavailable voltage shows `-- V`.
+  A batch with a reading outside 2.0–4.5 V shows both values as unavailable.
+  The Cardputer-ADV power API does not report charging status.
+  The UI does not show charging status or remaining runtime.
+  With the power switch OFF and USB connected, the battery is disconnected.
+  The displayed voltage and percentage do not measure the battery in this mode.
 
 ## Idle shutdown
 
@@ -254,6 +283,20 @@ Auto-next is OFF or no next audio file exists.
 16. Remove the saved Browser folder or item. Check that the Browser opens root `/`.
 17. Remove the Browser config keys. Check that the Browser opens root `/`.
 18. Check that the serial console at 115200 baud shows mount, open, and error messages.
+19. Press **I** from Browse, Playing, and Settings. Check the system values.
+    Press **I** or **Backspace**. Check that the previous screen returns.
+    From Playing, open Settings, then System. Return through both screens.
+    Check that playback continues.
+20. Check the battery widget on every screen, with and without an SD card.
+    Check long UTF-8 browser paths. Check all themes.
+    Check that the path, title, settings rows, and hint bar remain readable.
+21. Let the display turn off on System. Press **I** to wake it and return.
+    Check that the battery widget updates after wake.
+    With playback stopped, check that system refreshes do not prevent idle shutdown.
+22. Set the power switch to ON. Compare the displayed battery voltage with a meter.
+    Check the percentage on pause, during playback, and during charging.
+    Check that voltage and percentage update together.
+    Treat the percentage as an estimate, not a runtime measurement.
 
 **Hardware validation status:** host tests and the firmware build pass.
 This environment does not have a completed on-device checklist.
@@ -272,7 +315,7 @@ platformio.ini    firmware and native environments
 
 ## Architecture (short)
 
-- **`App`** — Browse ↔ Playing ↔ Settings state machine
+- **`App`** — Browse, Playing, Settings, and System screen control
 - **`SdBrowser`** — SD card mount and directory listing (`readdir`)
 - **`Player`** — FreeRTOS audio task, auto-next, next/previous
 - **`AudioOut`** — ES8311 + I2S + volume curve

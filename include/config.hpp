@@ -35,6 +35,10 @@ constexpr uint32_t kSdSpiHz = 4000000;
 constexpr int kHintBarH = 12;
 constexpr int kListRowH = 14;
 constexpr int kMaxVisibleRows = 7;
+constexpr int kBatteryWidgetW = 60;
+constexpr uint32_t kBatteryUpdateMs = 5000;
+constexpr uint32_t kBatterySampleMs = 20;
+constexpr uint8_t kBatterySamples = 16;
 constexpr uint8_t kDisplayBrightness = 128;
 constexpr uint32_t kDisplayTimeoutMs = 10000;
 

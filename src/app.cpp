@@ -187,7 +187,7 @@ void App::loop() {
     noteActivity(now);
     ui_.showToast(errBuf, now);
     if (player_.snapshot().state == PlayState::Error) {
-      if (screen_ != Screen::Settings) screen_ = Screen::Browse;
+      if (screen_ == Screen::Browse || screen_ == Screen::Playing) screen_ = Screen::Browse;
     }
     forceUi = true;
   }
@@ -206,6 +206,24 @@ void App::loop() {
 }
 
 void App::handle(Action a) {
+  if (a == Action::System) {
+    if (screen_ == Screen::System) {
+      screen_ = systemReturn_;
+    } else {
+      if (screen_ == Screen::Browse) {
+        rememberBrowserLocation();
+        flushBrowserLocation(true);
+      }
+      systemReturn_ = screen_;
+      screen_ = Screen::System;
+    }
+    return;
+  }
+  if (screen_ == Screen::System) {
+    if (a == Action::Back) screen_ = systemReturn_;
+    return;
+  }
+
   // The Settings key works on the Browse and Playing screens.
   if (a == Action::Settings && screen_ != Screen::Settings) {
     if (screen_ == Screen::Browse) {
@@ -241,6 +259,8 @@ void App::handle(Action a) {
       break;
     case Screen::Settings:
       handleSettings(a);
+      break;
+    case Screen::System:
       break;
   }
 }

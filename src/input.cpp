@@ -54,6 +54,9 @@ Action Input::poll(Screen screen) {
       case 's':
       case 'S':
         return Action::Settings;
+      case 'i':
+      case 'I':
+        return Action::System;
       // Extra alias keys.
       case '=':
       case '+':

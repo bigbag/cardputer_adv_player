@@ -1,14 +1,15 @@
 #include "ui.hpp"
 #include "config.hpp"
 #include <M5Cardputer.h>
+#include <esp_timer.h>
 #include <cstdio>
 #include <cstring>
 
-static void drawFileText(char* text, int x, int y) {
+static void drawFileText(char* text, int x, int y, int right = cfg::kScreenW - 2) {
   auto& d = M5Cardputer.Display;
   const auto* previousFont = d.getFont();
   d.setFont(&fonts::efontJA_10);
-  const int width = cfg::kScreenW - x - 2;
+  const int width = right - x;
   if (d.textWidth(text) > width) {
     const int end = d.textLength(text, width - d.textWidth("...") + 1);
     std::strcpy(text + end, "...");
@@ -28,6 +29,7 @@ void Ui::begin() {
   hasLastBrowse_ = false;
   hasLastPlayer_ = false;
   hasLastSettings_ = false;
+  battery_ = {};
   displayOn_ = true;
   lastHint_[0] = '\0';
 }
@@ -51,6 +53,7 @@ void Ui::setDisplayOn(bool on) {
     hasLastBrowse_ = false;
     hasLastPlayer_ = false;
     hasLastSettings_ = false;
+    battery_ = {};
   } else {
     d.setBrightness(0);
   }
@@ -147,6 +150,14 @@ bool Ui::render(Screen screen,
     return false;
   }
 
+  const int previousBatteryMv = battery_.millivolts();
+  const int previousBatteryLevel = battery_.level();
+  if (battery_.due(nowMs)) {
+    battery_.addSample(nowMs, M5.Power.getBatteryVoltage());
+  }
+  const bool batteryChanged = battery_.level() != previousBatteryLevel;
+  const bool batteryVoltageChanged = battery_.millivolts() != previousBatteryMv;
+
   // Read the selected theme from settings. Apply theme changes immediately.
   bool themeChanged = false;
   if (theme_.name != settings.theme().name) {
@@ -182,10 +193,14 @@ bool Ui::render(Screen screen,
       }
     } else if (screen == Screen::Settings) {
       dirty = settingsChanged(settings);
+    } else if (screen == Screen::System) {
+      dirty = batteryVoltageChanged || nowMs - lastSystemMs_ >= 1000 ||
+              browse.sdOk != lastSdOk_;
     }
   }
   if (!dirty) {
-    return false;
+    if (batteryChanged) drawBattery();
+    return batteryChanged;
   }
 
   auto& d = M5Cardputer.Display;
@@ -213,11 +228,15 @@ bool Ui::render(Screen screen,
       drawPlaying(player, full);
       rememberPlayer(player);
     }
-  } else {
+  } else if (screen == Screen::Settings) {
     drawSettings(settings);
     rememberSettings(settings);
+  } else if (screen == Screen::System) {
+    drawSystem(browse, nowMs, force || screenSwitch || themeChanged || toastExpired);
+    lastSdOk_ = browse.sdOk;
   }
 
+  if (!progressOnly || batteryChanged) drawBattery();
   drawToastIfAny(nowMs);
   lastToastExp_ = toast_.expiresAtMs;
   return true;
@@ -234,7 +253,7 @@ void Ui::drawBrowse(const BrowseSnapshot& b, bool full) {
       d.setTextColor(theme_.dim, theme_.bg);
       d.drawString("FAT32 only (not exFAT)", 4, cfg::kScreenH / 2 + 6);
     }
-    drawHint("Ent retry  S set");
+    drawHint("Ent retry  S set  I sys");
     return;
   }
 
@@ -243,7 +262,7 @@ void Ui::drawBrowse(const BrowseSnapshot& b, bool full) {
     d.setTextColor(theme_.dim, theme_.bg);
     char pathBuf[cfg::kMaxPathLen + 4];
     snprintf(pathBuf, sizeof(pathBuf), "SD:%s", b.path);
-    drawFileText(pathBuf, 2, 1);
+    drawFileText(pathBuf, 2, 1, cfg::kScreenW - cfg::kBatteryWidgetW - 2);
   }
 
   const int listY = 12;
@@ -315,7 +334,7 @@ void Ui::drawBrowse(const BrowseSnapshot& b, bool full) {
     d.drawString("* truncated", 2, truncY);
   }
 
-  drawHint(";. move  P play  S set");
+  drawHint(";. move  P play  S set  I sys");
 }
 
 void Ui::drawPlayingProgress(const PlayerSnapshot& p) {
@@ -394,7 +413,7 @@ void Ui::drawPlaying(const PlayerSnapshot& p, bool full) {
     d.drawString(volBuf, 4, 74);
   }
 
-  drawHint(";. trk  P brws  [] seek");
+  drawHint(";. trk  P brws  [] seek  I sys");
 }
 
 void Ui::drawSettings(const Settings& s) {
@@ -424,7 +443,67 @@ void Ui::drawSettings(const Settings& s) {
     d.drawString(val, cfg::kScreenW - 4 - vw, y + 3);
   }
 
-  drawHint(";. move  ,/ adj  Bs save");
+  drawHint(";. move  ,/ adj  Bs save  I sys");
+}
+
+void Ui::drawBattery() {
+  auto& d = M5Cardputer.Display;
+  const int x = cfg::kScreenW - cfg::kBatteryWidgetW;
+  d.fillRect(x, 0, cfg::kBatteryWidgetW, 12, theme_.bg);
+  d.setTextColor(theme_.dim, theme_.bg);
+  const int level = battery_.level();
+  char text[8];
+  if (level < 0) {
+    snprintf(text, sizeof(text), "--%%");
+  } else {
+    snprintf(text, sizeof(text), "~%d%%", level);
+  }
+  d.drawString(text, x + 2, 2);
+  const int iconX = cfg::kScreenW - 22;
+  d.drawRect(iconX, 2, 18, 8, theme_.dim);
+  d.fillRect(iconX + 18, 4, 2, 4, theme_.dim);
+  if (level > 0) {
+    const int fill = (level * 14 + 99) / 100;
+    d.fillRect(iconX + 2, 4, fill, 4, theme_.dim);
+  }
+}
+
+void Ui::drawSystem(const BrowseSnapshot& b, uint32_t nowMs, bool full) {
+  auto& d = M5Cardputer.Display;
+  char line[40];
+  d.setTextColor(theme_.fg, theme_.bg);
+  if (full) {
+    d.fillRect(0, 0, cfg::kScreenW, cfg::kScreenH - cfg::kHintBarH, theme_.bg);
+    d.drawString("SYSTEM", 4, 2);
+    d.drawString("Device  Cardputer-ADV", 4, 18);
+    snprintf(line, sizeof(line), "%s  %luMHz  %u cores", ESP.getChipModel(),
+             static_cast<unsigned long>(ESP.getCpuFreqMHz()),
+             static_cast<unsigned>(ESP.getChipCores()));
+    d.drawString(line, 4, 32);
+    snprintf(line, sizeof(line), "Flash   %lu MiB",
+             static_cast<unsigned long>(ESP.getFlashChipSize() / (1024 * 1024)));
+    d.drawString(line, 4, 46);
+  }
+  d.fillRect(0, 60, cfg::kScreenW, 4 * cfg::kListRowH, theme_.bg);
+  snprintf(line, sizeof(line), "Heap    %lu KiB free",
+           static_cast<unsigned long>(ESP.getFreeHeap() / 1024));
+  d.drawString(line, 4, 60);
+  const uint64_t seconds = static_cast<uint64_t>(esp_timer_get_time()) / 1000000;
+  snprintf(line, sizeof(line), "Uptime  %luh %02lum %02lus",
+           static_cast<unsigned long>(seconds / 3600),
+           static_cast<unsigned long>((seconds / 60) % 60),
+           static_cast<unsigned long>(seconds % 60));
+  d.drawString(line, 4, 74);
+  d.drawString(b.sdOk ? "SD      Mounted" : "SD      Not mounted", 4, 88);
+  const int mv = battery_.millivolts();
+  if (mv > 0) {
+    snprintf(line, sizeof(line), "Battery %d.%03d V", mv / 1000, mv % 1000);
+  } else {
+    snprintf(line, sizeof(line), "Battery -- V");
+  }
+  d.drawString(line, 4, 102);
+  drawHint("I / Bs back");
+  lastSystemMs_ = nowMs;
 }
 
 void Ui::drawHint(const char* text) {

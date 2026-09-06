@@ -2,6 +2,7 @@
 #include "types.hpp"
 #include "settings.hpp"
 #include "theme.hpp"
+#include "battery_reading.hpp"
 #include <cstdint>
 
 class Ui {
@@ -24,6 +25,8 @@ class Ui {
   void drawPlaying(const PlayerSnapshot& p, bool full);
   void drawPlayingProgress(const PlayerSnapshot& p);
   void drawSettings(const Settings& s);
+  void drawSystem(const BrowseSnapshot& b, uint32_t nowMs, bool full);
+  void drawBattery();
   void drawHint(const char* text);
   void drawToastIfAny(uint32_t nowMs);
   bool browseChanged(const BrowseSnapshot& b) const;
@@ -42,6 +45,8 @@ class Ui {
   bool hasLastPlayer_ = false;
   bool hasLastSettings_ = false;
   bool displayOn_ = true;
+  BatteryReading battery_;
+  uint32_t lastSystemMs_ = 0;
 
   char lastPath_[cfg::kMaxPathLen]{};
   DirEntry lastEntries_[cfg::kMaxDirEntries]{};

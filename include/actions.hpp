@@ -17,4 +17,5 @@ enum class Action : uint8_t {
   TogglePlayer,  // Switch between Browse and Playing if the player has a track.
   RetrySd,
   Settings,  // Open Settings with Tab or S.
+  System,
 };
