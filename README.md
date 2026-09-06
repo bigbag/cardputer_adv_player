@@ -1,10 +1,11 @@
 # Cardputer Player
 
-Minimal MP3/WAV player for **M5Stack Cardputer-ADV** (ESP32-S3 / Stamp-S3A).
+Minimal MP3/WAV/FLAC player for **M5Stack Cardputer-ADV** (ESP32-S3 / Stamp-S3A).
 
-The player reads files from a FAT32 SD card. It plays MP3 files and 16-bit PCM
-WAV files through the ES8311 codec. Audio goes to the speaker or to the
-3.5 mm jack. The 240×135 display shows a terminal-style user interface.
+The player reads files from a FAT32 SD card. It plays MP3, 16-bit PCM WAV,
+and supported FLAC files through the ES8311 codec.
+Audio goes to the speaker or to the 3.5 mm jack.
+The 240×135 display shows a terminal-style user interface.
 
 ## Requirements
 
@@ -13,7 +14,7 @@ WAV files through the ES8311 codec. Audio goes to the speaker or to the
 - Python **3.10–3.13** for PlatformIO. PlatformIO does not support Python 3.14
   or later. The Makefile automatically uses `python3.12 -m platformio` when
   necessary.
-- FAT32 microSD card with `.mp3` / `.wav` files
+- FAT32 microSD card with `.mp3`, `.wav`, or supported `.flac` files
 
 ## Quick start
 
@@ -81,6 +82,7 @@ If the device shows **No SD card**, do this:
     track01.mp3
   album2/
     intro.wav
+    song.flac
 ```
 
 The browser starts at the SD card root. It supports nested folders.
@@ -250,10 +252,95 @@ Auto-next is OFF or no next audio file exists.
 
 ## Audio notes
 
-- Formats: MP3 (minimp3), WAV PCM 16-bit mono/stereo
+- Formats: MP3 (minimp3), WAV PCM 16-bit mono/stereo, bounded native FLAC (dr_flac)
 - Output: ES8311 + I2S
 - The jack mute is **hardware** (the MCU has no detect pin). One software
   volume curve serves both output paths.
+- Both source channels contribute equally to the mono ES8311 output.
+  Identical channels keep their level. Opposite channels cancel.
+- Software volume uses a fourth-power Q15 curve from mute to unity.
+  It does not add PCM boost. The default is 30%. The step is 2%.
+  A 50% setting matches 25% on the previous quadratic curve.
+  A 55% setting approximately matches the previous 30%.
+  The maximum gain at 100% stays unchanged.
+  Settings from 1% through 7% round to silence.
+  The user defers the hardware loudness and distortion checks.
+- MP3 duration uses Xing/Info when available.
+  `~` marks a fallback estimate. `--:--` marks an unknown duration.
+  Seek remains approximate. It uses bounded reservoir pre-roll.
+- WAV parsing follows RIFF chunks instead of a fixed-size header.
+  Metadata-heavy 16-bit PCM files use the same parser as native tests.
+
+### FLAC limits
+
+- Native `.flac` files only. Ogg FLAC, AAC/M4A, Vorbis, and Opus are not supported.
+- Mono or stereo, 16-bit or 24-bit, from 8000 through 48000 Hz.
+  The output stays stereo 16-bit PCM. The decoder discards the low eight bits of 24-bit samples.
+- The maximum FLAC block size is 4608 frames.
+  STREAMINFO must declare a nonzero sample count and a duration that fits 32-bit milliseconds.
+- The library can request at most 64 KiB of heap.
+  Its sample buffer and seek table share this limit.
+  The input adapter, allocation headers, and task stack are separate.
+  Album art and other unused metadata do not get a heap buffer.
+- Open and each decode call can read at most 64 KiB.
+  Each seek can read at most 256 KiB.
+  A valid file can exceed these limits and produce an error.
+  These byte limits do not bound an SD driver stall.
+- Position counts delivered frames. Seek uses the sample timeline.
+  A seek to the displayed end finishes the track.
+  CRC errors, missing frames, failed I/O, and exhausted read budgets stop playback.
+  A failed seek stops playback. Reopen the file to clear a decoder error.
+- FLAC listening, SD timing, and memory margins still need on-device checks.
+
+### Audio baseline diagnostics
+
+Normal builds set `AUDIO_DIAG=0`. Build the diagnostic version with:
+
+```bash
+make build ENV_DEVICE=cardputer-adv-diag
+```
+
+If the upload loses communication after `Stub running`, upload the diagnostic
+build without the stub:
+
+```bash
+PLATFORMIO_UPLOAD_FLAGS=--no-stub make flash ENV_DEVICE=cardputer-adv-diag
+```
+
+Both environments use the same pinned M5 library versions.
+The diagnostic version uses the same PCM, volume, codec, and DMA behavior as the normal version.
+It logs track format, source channels, internal heap, largest free block,
+task stack margin, maximum decode time, seek results and elapsed time, and output failures.
+It also reads the ES8311 initialization registers.
+An unavailable register read does not change the codec settings.
+The logged I2S rate is the configured rate, not a measured clock.
+
+Generate the listening files on a host with Python 3.10–3.13 and FFmpeg
+with `libmp3lame` and `ffprobe`:
+
+```bash
+python3.12 tools/generate_audio_fixtures.py --output /tmp/cardputer-audio-fixtures
+python3.12 tools/test_audio_fixtures.py
+sha256sum .pio/build/cardputer-adv-diag/firmware.bin
+```
+
+The generator creates eleven reference files, two truncated files, and
+`manifest.json`. The manifest records format, timing, encoder version, and
+SHA256 hashes. MP3 files have 2/3/4 kHz markers at 5/10/15 seconds.
+Each marker lasts 0.5 seconds. WAV files include separate left/right tones,
+identical channels, opposite-phase channels, and a large metadata chunk.
+The generator rejects a nonempty output directory unless `--force` is set.
+That option replaces fixture files but keeps unrelated files.
+Keep generated listening files outside this repository.
+
+Copy the fixtures to the SD card before device checks.
+Record the firmware hash and manifest with the serial log at 115200 baud.
+Measure pause and seek latency, heap and stack margin, and 44.1/48 kHz changes.
+Compare volume at 20/30/50/70/100% on the speaker and headphones separately.
+Start headphone checks at a low level.
+Keep the Step 0 baseline firmware and fixture hashes for before/after comparisons.
+Host checks cover right-channel mixing and metadata-heavy WAV parsing.
+The user defers the full on-device matrix and listening comparisons.
 
 ## On-device checklist
 
@@ -297,6 +384,15 @@ Auto-next is OFF or no next audio file exists.
     Check the percentage on pause, during playback, and during charging.
     Check that voltage and percentage update together.
     Treat the percentage as an estimate, not a runtime measurement.
+23. Play supported FLAC files in mono and stereo at 44.1 and 48 kHz.
+    Check both 16-bit input and 24-bit input converted to 16-bit output.
+    Check forward seek, backward seek, seek while paused, and seek from the end.
+24. Put MP3, WAV, and FLAC files in one folder.
+    Check next, previous, Auto-next, and restored FLAC playback after restart.
+25. Open truncated FLAC files and files above the FLAC limits.
+    Check that errors prevent Auto-next.
+    With the diagnostic build, record heap, largest free block, stack margin,
+    decode time, and seek time during repeated track changes.
 
 **Hardware validation status:** host tests and the firmware build pass.
 This environment does not have a completed on-device checklist.
@@ -307,6 +403,7 @@ This environment does not have a completed on-device checklist.
 include/          config, actions, types, path_utils
 src/              app, ui, input, player, sd_browser, audio_out, decoders/
 lib/minimp3/      third-party minimp3.h
+lib/dr_flac/      pinned third-party FLAC decoder and provenance
 test/             native Unity tests
 docs/             audio architecture
 Makefile          build, upload, and test commands
@@ -319,7 +416,7 @@ platformio.ini    firmware and native environments
 - **`SdBrowser`** — SD card mount and directory listing (`readdir`)
 - **`Player`** — FreeRTOS audio task, auto-next, next/previous
 - **`AudioOut`** — ES8311 + I2S + volume curve
-- **`Mp3Decoder` / `WavDecoder`** — decode to stereo PCM
+- **`Mp3Decoder` / `WavDecoder` / `FlacDecoder`** — decode to stereo PCM
 - **`Settings`** — SD card config file load/save
 - **`Ui` / `Input`** — terminal-style UI + keys
 

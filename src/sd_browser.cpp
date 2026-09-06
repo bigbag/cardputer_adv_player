@@ -27,7 +27,7 @@ static int cmpInsensitive(const char* a, const char* b) {
 }
 
 static bool isAudioName(const char* name) {
-  return path::hasExtInsensitive(name, ".mp3") || path::hasExtInsensitive(name, ".wav");
+  return path::kindFromName(name) != EntryKind::Dir;
 }
 
 static bool isAbsolutePath(const char* path) {
@@ -309,7 +309,7 @@ bool SdBrowser::nextAudioAfter(const char* fileName, char* outPath, size_t outCa
   }
 
   for (size_t i = startIdx + 1; i < count_; ++i) {
-    if (entries_[i].kind == EntryKind::Mp3 || entries_[i].kind == EntryKind::Wav) {
+    if (entries_[i].kind != EntryKind::Dir) {
       return path::join(outPath, outCap, path_, entries_[i].name);
     }
   }
@@ -349,7 +349,7 @@ bool SdBrowser::prevAudioBefore(const char* fileName, char* outPath, size_t outC
   if (startIdx == 0 || startIdx >= count_) return false;
 
   for (size_t i = startIdx; i-- > 0;) {
-    if (entries_[i].kind == EntryKind::Mp3 || entries_[i].kind == EntryKind::Wav) {
+    if (entries_[i].kind != EntryKind::Dir) {
       return path::join(outPath, outCap, path_, entries_[i].name);
     }
   }

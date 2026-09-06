@@ -8,7 +8,7 @@ class AudioOut {
   bool begin();
   void end();
   bool setSampleRate(uint32_t hz);
-
+  bool resetStream();
   void setVolumePercent(int percent);
   int volumePercent() const { return volume_; }
 
@@ -17,16 +17,15 @@ class AudioOut {
 
  private:
   bool esWrite(uint8_t reg, uint8_t val);
+  bool esRead(uint8_t reg, uint8_t& value);
   bool esInitRegisters();
   bool i2sStart(uint32_t rate);
   void i2sStop();
   void applyVolume();
-  // Sample gain: sample * mulNum_ / mulDen_ (high-resolution curve + boost).
-  void recomputeMul();
 
   uint32_t rate_ = 0;
   int volume_ = 45;
   bool ready_ = false;
-  int32_t mulNum_ = 0;
-  int32_t mulDen_ = 1;
+  bool installed_ = false;  // Track driver ownership so end() can release partial setup.
+  int32_t gainQ15_ = 0;
 };

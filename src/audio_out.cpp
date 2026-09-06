@@ -1,4 +1,5 @@
 #include "audio_out.hpp"
+#include "audio_dsp.hpp"
 #include "config.hpp"
 
 #include <M5Cardputer.h>
@@ -24,6 +25,18 @@ bool AudioOut::esWrite(uint8_t reg, uint8_t val) {
                                  cfg::kEs8311I2cHz);
 }
 
+#if AUDIO_DIAG
+bool AudioOut::esRead(uint8_t reg, uint8_t& value) {
+  uint8_t v = 0;
+  if (!M5.In_I2C.readRegister(cfg::kEs8311Addr, reg, &v, 1,
+                              cfg::kEs8311I2cHz)) {
+    return false;
+  }
+  value = v;
+  return true;
+}
+#endif
+
 bool AudioOut::esInitRegisters() {
   for (auto& pair : kEs8311InitSeq) {
     if (!esWrite(pair[0], pair[1])) {
@@ -35,50 +48,13 @@ bool AudioOut::esInitRegisters() {
   return true;
 }
 
-// Gain: out = in * (UI/100)^exp * boost = in * UI^exp * boost / 100^exp.
-// Fractional gain preserves volume differences at low settings.
-void AudioOut::recomputeMul() {
-  int v = volume_;
-  if (v < 0) v = 0;
-  if (v > 100) v = 100;
-
-  if (v == 0) {
-    mulNum_ = 0;
-    mulDen_ = 1;
-    return;
-  }
-
-  // num = v^exp * boost ; den = 100^exp
-  int64_t num = v;
-  int64_t den = 100;
-  for (int e = 1; e < cfg::kVolCurveExpNum; ++e) {
-    num *= v;
-    den *= 100;
-  }
-  num *= cfg::kVolPcmBoost;
-
-  // Reduce the fraction so num and den fit in int32.
-  while (num > 2000000000LL || den > 2000000000LL) {
-    num /= 2;
-    den /= 2;
-  }
-  if (num < 1) num = 1;
-  if (den < 1) den = 1;
-  mulNum_ = static_cast<int32_t>(num);
-  mulDen_ = static_cast<int32_t>(den);
-}
-
+// Software volume changes PCM gain, not the codec's fixed DAC gain.
 void AudioOut::applyVolume() {
-  recomputeMul();
-  esWrite(0x32, 0xBF);
-
-  // Calculate the gain as a percentage of full scale.
-  // A 100% volume setting with a boost of 3 gives 300%.
-  const int effPct = (volume_ <= 0)
-                         ? 0
-                         : static_cast<int>((100LL * mulNum_) / mulDen_);
-  Serial.printf("[audio] ui=%d%% eff~%d%% (×%ld/%ld)\n", volume_, effPct,
-                static_cast<long>(mulNum_), static_cast<long>(mulDen_));
+  gainQ15_ = audio_dsp::volumeToGainQ15(volume_);
+#if AUDIO_DIAG
+  Serial.printf("[audio] ui=%d%% gain q15=%ld\n", volume_,
+                static_cast<long>(gainQ15_));
+#endif
 }
 
 bool AudioOut::i2sStart(uint32_t rate) {
@@ -110,16 +86,22 @@ bool AudioOut::i2sStart(uint32_t rate) {
     i2s_driver_uninstall(kI2sPort);
     return false;
   }
-
+  installed_ = true;
   rate_ = rate;
+#if AUDIO_DIAG
+  Serial.printf("[audio] i2s rate req=%lu cfg=%lu\n",
+                static_cast<unsigned long>(rate),
+                static_cast<unsigned long>(i2s_get_clk(kI2sPort)));
+#endif
   return true;
 }
 
 void AudioOut::i2sStop() {
-  if (rate_) {
+  if (installed_) {
     i2s_driver_uninstall(kI2sPort);
-    rate_ = 0;
+    installed_ = false;
   }
+  rate_ = 0;
 }
 
 bool AudioOut::begin() {
@@ -130,13 +112,23 @@ bool AudioOut::begin() {
     Serial.println("[audio] ES8311 init failed");
     return false;
   }
+#if AUDIO_DIAG
+  // Report failed register reads as unavailable, not as zero.
+  for (uint8_t r : {0x00, 0x01, 0x02, 0x09, 0x12, 0x13, 0x32, 0x37}) {
+    uint8_t v = 0;
+    if (esRead(r, v)) {
+      Serial.printf("[audio] es8311 reg %02X = %02X\n", r, v);
+    } else {
+      Serial.printf("[audio] es8311 reg %02X unavailable\n", r);
+    }
+  }
+#endif
   if (!i2sStart(cfg::kDefaultSampleRate)) return false;
 
   volume_ = cfg::kDefaultVolumePercent;
   applyVolume();
   ready_ = true;
-  Serial.printf("[audio] ready quiet-zone curve exp=%d boost×%d step=%d\n",
-                cfg::kVolCurveExpNum, cfg::kVolPcmBoost, cfg::kVolumeStepPercent);
+  Serial.printf("[audio] ready q15 gain=%ld\n", static_cast<long>(gainQ15_));
   return true;
 }
 
@@ -150,10 +142,49 @@ void AudioOut::end() {
 
 bool AudioOut::setSampleRate(uint32_t hz) {
   if (!ready_) return false;
-  if (hz == rate_) return true;
+  if (hz == 0) return false;
+  // Fast path only when the driver is actually installed.
+  if (hz == rate_ && installed_) return true;
+
+  // Clock change only: no gain recalculation and no codec register writes.
+  const esp_err_t err =
+      i2s_set_clk(kI2sPort, hz, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO);
+  if (err == ESP_OK) {
+    rate_ = hz;
+#if AUDIO_DIAG
+    // i2s_get_clk reports the configured clock, not a measurement.
+    Serial.printf("[audio] rate req=%lu cfg=%lu\n",
+                  static_cast<unsigned long>(hz),
+                  static_cast<unsigned long>(i2s_get_clk(kI2sPort)));
+#endif
+    return true;
+  }
+
+  // One uninstall/install cycle restores a complete driver at the new rate.
+  Serial.printf("[audio] i2s_set_clk err=%d; reinstall at %lu\n",
+                static_cast<int>(err), static_cast<unsigned long>(hz));
   i2sStop();
-  if (!i2sStart(hz)) return false;
-  applyVolume();
+  if (!i2sStart(hz)) {
+    // Never leave ready_ true without a driver.
+    ready_ = false;
+    Serial.println("[audio] output unavailable");
+    return false;
+  }
+  return true;
+}
+
+bool AudioOut::resetStream() {
+  if (!ready_) return false;
+  // ponytail: reinstall the driver on each seek to clear its queue and DMA.
+  // This uses public IDF calls but requires an allocation cycle.
+  // Use a measured public-API reset if seek latency becomes a problem.
+  const uint32_t rate = rate_;
+  i2sStop();
+  if (!i2sStart(rate)) {
+    ready_ = false;
+    Serial.println("[audio] output unavailable");
+    return false;
+  }
   return true;
 }
 
@@ -170,31 +201,36 @@ size_t AudioOut::write(const int16_t* stereoFrames, size_t frames) {
   constexpr size_t kChunkFrames = 128;
   int16_t buf[kChunkFrames * 2];
   size_t written = 0;
-  const int32_t num = mulNum_;
-  const int32_t den = mulDen_;
+  const int32_t gain = gainQ15_;
 
   while (written < frames) {
     size_t n = frames - written;
     if (n > kChunkFrames) n = kChunkFrames;
 
     const int16_t* src = stereoFrames + written * 2;
-    if (num <= 0) {
+    if (gain <= 0) {
       std::memset(buf, 0, n * 4);
-    } else if (num == den) {
-      std::memcpy(buf, src, n * 4);
     } else {
-      for (size_t i = 0; i < n * 2; ++i) {
-        int32_t s = static_cast<int32_t>(
-            (static_cast<int64_t>(src[i]) * num) / den);
-        if (s > 32767) s = 32767;
-        if (s < -32768) s = -32768;
-        buf[i] = static_cast<int16_t>(s);
+      // The mono DAC needs a downmix even at unity gain.
+      for (size_t i = 0; i < n; ++i) {
+        const int16_t mono = audio_dsp::stereoToMono(src[i * 2], src[i * 2 + 1]);
+        const int16_t s = audio_dsp::applyGainQ15(mono, gain);
+        buf[i * 2] = s;
+        buf[i * 2 + 1] = s;
       }
     }
 
     size_t bytesWritten = 0;
-    esp_err_t err = i2s_write(kI2sPort, buf, n * 4, &bytesWritten, portMAX_DELAY);
-    if (err != ESP_OK || bytesWritten == 0) break;
+    // Finite wait per 128-frame chunk bounds the audio task's output wait.
+    esp_err_t err = i2s_write(kI2sPort, buf, n * 4, &bytesWritten,
+                              pdMS_TO_TICKS(100));
+    if (err != ESP_OK || bytesWritten < n * 4) {
+#if AUDIO_DIAG
+      Serial.printf("[audio] i2s_write err=%d req=%u got=%u\n", static_cast<int>(err),
+                    static_cast<unsigned>(n * 4), static_cast<unsigned>(bytesWritten));
+#endif
+      break;
+    }
     written += bytesWritten / 4;
   }
 

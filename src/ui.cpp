@@ -94,6 +94,7 @@ bool Ui::playerChanged(const PlayerSnapshot& p) const {
   if (playerChromeChanged(p)) return true;
   if ((p.positionMs / 1000) != (lastPlayer_.positionMs / 1000)) return true;
   if ((p.durationMs / 1000) != (lastPlayer_.durationMs / 1000)) return true;
+  if (p.durationEstimated != lastPlayer_.durationEstimated) return true;
   return false;
 }
 
@@ -351,9 +352,10 @@ void Ui::drawPlayingProgress(const PlayerSnapshot& p) {
   } else {
     uint32_t posSec = p.positionMs / 1000;
     uint32_t durSec = p.durationMs / 1000;
-    snprintf(timeBuf, sizeof(timeBuf), "%02lu:%02lu / %02lu:%02lu",
+    snprintf(timeBuf, sizeof(timeBuf), "%02lu:%02lu / %s%02lu:%02lu",
              static_cast<unsigned long>(posSec / 60),
              static_cast<unsigned long>(posSec % 60),
+             p.durationEstimated ? "~" : "",
              static_cast<unsigned long>(durSec / 60),
              static_cast<unsigned long>(durSec % 60));
   }

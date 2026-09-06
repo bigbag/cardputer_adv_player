@@ -3,8 +3,11 @@
 #include <cstdint>
 
 enum class Screen : uint8_t { Browse, Playing, Settings, System };
-enum class EntryKind : uint8_t { Dir, Mp3, Wav };
+enum class EntryKind : uint8_t { Dir, Mp3, Wav, Flac };
 enum class PlayState : uint8_t { Idle, Playing, Paused, Done, Error };
+enum class PlayerError : uint8_t {
+  None, CannotDecode, BadFormat, DecodeError, AudioOutputError, TaskCreateError, SeekError
+};
 enum class OnBootMode : uint8_t { Play, Browse, Off };
 
 struct DirEntry {
@@ -34,6 +37,7 @@ struct PlayerSnapshot {
   uint32_t durationMs;
   int volumePercent;
   uint32_t sampleRate;
+  bool durationEstimated = false;
 };
 
 struct Toast {

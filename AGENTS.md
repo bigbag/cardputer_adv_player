@@ -11,7 +11,7 @@
 
 ## Project
 
-- This project is an MP3 and 16-bit PCM WAV player for M5Stack Cardputer-ADV.
+- This project is an MP3, 16-bit PCM WAV, and bounded FLAC player for M5Stack Cardputer-ADV.
 - The firmware uses C++17, Arduino, PlatformIO, and the M5Cardputer library.
 - The hardware uses an ESP32-S3 on a Stamp-S3A module. The build disables PSRAM.
 - Audio output uses the ES8311 codec and I2S. The display is 240 by 135 pixels.
@@ -49,7 +49,7 @@ python3.12 -m platformio test -e native -f test_idle_timeout
 - `src/app.cpp` controls screens, commands, settings, and power.
 - `src/player.cpp` controls the audio task, playback, and track selection.
 - `src/audio_out.cpp` controls the ES8311 codec, I2S output, and volume.
-- `src/decoders/` contains MP3 and WAV decoders that produce stereo 16-bit PCM.
+- `src/decoders/` contains MP3, WAV, and FLAC decoders that produce stereo 16-bit PCM.
 - `src/sd_browser.cpp` controls SD access, directory lists, and browser position.
 - `src/settings.cpp` reads and writes `/.asvmp3/config.cfg` on the SD card.
 - `src/ui.cpp` draws the display. `src/input.cpp` reads keyboard actions.
@@ -57,12 +57,15 @@ python3.12 -m platformio test -e native -f test_idle_timeout
 - `include/types.hpp` defines shared states and snapshots.
 - `include/browser_history.hpp` and `include/idle_timeout.hpp` contain state helpers for the firmware and native tests.
 - `lib/minimp3/` contains the third-party MP3 decoder. Do not edit it for unrelated application changes.
+- `lib/dr_flac/` contains the pinned FLAC decoder and its provenance. Keep upstream code unchanged.
 
 ## Behavior to preserve
 
 - Open and run decoders on the core-0 audio task. Keep decoding and I2S writes out of the UI loop.
   `Player::service()` handles automatic track changes in the application loop.
 - Stop the audio task. Wait for it to exit before you close decoder resources, audio output, or SD access.
+- Keep FLAC block, heap, and read-work limits in `include/config.hpp`.
+  FLAC uses known sample totals and checks frame continuity. Failed seeks stop the decoder.
 - Playback can continue while the display shows Browse or Settings.
   Track navigation uses the playing track's folder, not the visible browser folder.
 - Keep the saved browser location separate from the last played track.
@@ -84,7 +87,9 @@ python3.12 -m platformio test -e native -f test_idle_timeout
 
 - Run `make build` after firmware changes. Run `make test` after changes to code that native tests use.
 - Native tests use Unity and `UNIT_TEST`.
-  For the native environment, `platformio.ini` includes only `path_utils.cpp` and `decoders/wav_decoder.cpp` as source files.
+  The native environment includes path utilities, audio DSP, MP3 metadata, and all three decoder sources.
+  MP3 and FLAC tests run real decoders with native file adapters.
+  WAV tests run the shared parser and arithmetic helpers, not firmware file I/O.
   Native tests also check header-only state helpers. They do not run the full firmware.
 - Keep regression checks for observable failures, state transitions, and boundaries.
   For timeout changes, check disabled timeouts, command resets, playback transitions, and clock wrap.

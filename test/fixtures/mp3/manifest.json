@@ -1,0 +1,128 @@
+{
+  "generator": "test/fixtures/mp3/generate.py",
+  "note": "chirp 800-3200 Hz, level 0.5, ffmpeg libmp3lame bitexact",
+  "fixtures": [
+    {
+      "file": "cbr128_stereo_44100.mp3",
+      "sample_rate": 44100,
+      "channels": 2,
+      "seconds": 2.0,
+      "args": [
+        "-b:a",
+        "128k"
+      ],
+      "sha256": "32dfcbaa9f2a244c2c3b7023ea7ba3c3139267ef6f82525a1abb4b682af1f786",
+      "bytes": 33037
+    },
+    {
+      "file": "cbr128_mono_44100.mp3",
+      "sample_rate": 44100,
+      "channels": 1,
+      "seconds": 2.0,
+      "args": [
+        "-b:a",
+        "128k"
+      ],
+      "sha256": "4f2482439bf7fd34bddc35d2b2086f58eff8fca360801980b4206ca5583370e2",
+      "bytes": 33037
+    },
+    {
+      "file": "cbr320_stereo_44100.mp3",
+      "sample_rate": 44100,
+      "channels": 2,
+      "seconds": 2.0,
+      "args": [
+        "-b:a",
+        "320k"
+      ],
+      "sha256": "2e99ac50acc7cb6936fa54bbb2743780e69923bb87c79027f7e641c9ddf911be",
+      "bytes": 82566
+    },
+    {
+      "file": "cbr128_stereo_48000.mp3",
+      "sample_rate": 48000,
+      "channels": 2,
+      "seconds": 2.0,
+      "args": [
+        "-b:a",
+        "128k"
+      ],
+      "sha256": "771092be6e5e2e932b8882cd6030124bbf2c3c2fc00a0702a4076e5938acd5b0",
+      "bytes": 33044
+    },
+    {
+      "file": "vbr_stereo_44100.mp3",
+      "sample_rate": 44100,
+      "channels": 2,
+      "seconds": 8.0,
+      "args": [
+        "-q:a",
+        "4"
+      ],
+      "sha256": "edbb4d26fd425f4d32119115b11db7763b11434e0ce20751ce619680ad2c3fac",
+      "bytes": 36191
+    },
+    {
+      "file": "noxing_cbr128_44100.mp3",
+      "sample_rate": 44100,
+      "channels": 2,
+      "seconds": 2.0,
+      "args": [
+        "-b:a",
+        "128k",
+        "-write_xing",
+        "0"
+      ],
+      "sha256": "aa055f2ef3b90070accbd2654eff5f39be9727fab8e9c64a9b1bfd01c355147b",
+      "bytes": 32620
+    },
+    {
+      "file": "id3v23_cbr128_44100.mp3",
+      "sample_rate": 44100,
+      "channels": 2,
+      "seconds": 2.0,
+      "args": [
+        "-b:a",
+        "128k",
+        "-id3v2_version",
+        "3",
+        "-metadata",
+        "title=fixture",
+        "-metadata",
+        "artist=generate.py"
+      ],
+      "sha256": "3ac5ac069cab7cd4dc1691c4a8f109b7f9247313c13fdf21f7ea6ebac2e642e9",
+      "bytes": 33079
+    },
+    {
+      "file": "id3v24_cbr128_44100.mp3",
+      "sample_rate": 44100,
+      "channels": 2,
+      "seconds": 2.0,
+      "args": [
+        "-b:a",
+        "128k",
+        "-id3v2_version",
+        "4",
+        "-metadata",
+        "title=fixture",
+        "-metadata",
+        "artist=generate.py"
+      ],
+      "sha256": "9e5bfc35e479ae9d517258b0dc8738200ed89c912398e23c3af4a1b137ca9baf",
+      "bytes": 33079
+    },
+    {
+      "file": "mpeg2_22050_mono.mp3",
+      "sample_rate": 22050,
+      "channels": 1,
+      "seconds": 2.0,
+      "args": [
+        "-b:a",
+        "128k"
+      ],
+      "sha256": "2db05a3f8257c3e3aa5f7a70978377ba54d9108b160b31773f6228e1532e758d",
+      "bytes": 33455
+    }
+  ]
+}

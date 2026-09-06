@@ -1,0 +1,24 @@
+{
+  "generator": "test/fixtures/flac/generate.py",
+  "note": "Generated chirps. Waveform constants also occur in test_flac_stream.cpp.",
+  "fixtures": [
+    {
+      "file": "chirp16_stereo_44100.flac",
+      "sample_rate": 44100,
+      "channels": 2,
+      "bits_per_sample": 16,
+      "total_samples": 44100,
+      "sha256": "c9dfef05b10ee73ff5a0727de5dd66c6b3009f17803cac20b7f7b5fb508ad137",
+      "bytes": 122901
+    },
+    {
+      "file": "chirp24_mono_32000.flac",
+      "sample_rate": 32000,
+      "channels": 1,
+      "bits_per_sample": 24,
+      "total_samples": 32000,
+      "sha256": "01b31d9b748e1ada1a14934742488ff89f28945b29432b638a2337a29c33f95f",
+      "bytes": 82307
+    }
+  ]
+}

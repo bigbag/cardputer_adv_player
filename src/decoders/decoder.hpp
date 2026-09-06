@@ -8,6 +8,9 @@ struct AudioFormat {
   uint16_t channels = 0;
   uint16_t bitsPerSample = 16;
   uint32_t durationMs = 0;
+  // Channels in the source stream. MP3 reports two output channels regardless.
+  uint16_t sourceChannels = 0;
+  bool durationEstimated = false;
 };
 
 enum class DecodeStatus : uint8_t {

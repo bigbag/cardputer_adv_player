@@ -1,0 +1,8 @@
+dr_flac (vendored, unmodified upstream single-header library)
+Upstream: https://github.com/mackron/dr_libs
+Pinned revision: dfe8377631000664666519fdb83da193fd8037f4 (version 0.13.4)
+Fetched from: https://raw.githubusercontent.com/mackron/dr_libs/dfe8377631000664666519fdb83da193fd8037f4/dr_flac.h
+SHA-256: 111144e778f55738db6851cb226015c419e00d04b916a09506d4856d9cff945c
+License: dual public domain / MIT-0, see the notice at the top of dr_flac.h.
+Build contract (defined in src/decoders/flac_decoder.cpp, not in this header):
+DR_FLAC_NO_STDIO, DR_FLAC_NO_OGG, DR_FLAC_NO_SIMD. CRC checking stays enabled.

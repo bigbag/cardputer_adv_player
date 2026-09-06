@@ -13,7 +13,20 @@ struct WavInfo {
   const char* error = nullptr;
 };
 
-WavInfo wavParseHeader(const uint8_t* data, size_t len);
+// Bounded random-access byte source. Returns the number of bytes read;
+// reads shorter than the requested size mean truncated data or a card
+// failure, never normal end of file.
+using WavReadAt = size_t (*)(void* context, uint32_t offset,
+                             uint8_t* destination, size_t size);
+
+// Scans the RIFF chunk tree through readAt. Works on real files and
+// in-memory buffers alike. Memory use is fixed: unknown chunks are
+// skipped by offset, never buffered.
+WavInfo wavParseStream(WavReadAt readAt, void* context, uint32_t fileSize);
+
+// Both helpers consume a validated WavInfo and return zero otherwise.
+uint32_t wavDurationMs(const WavInfo& info);
+uint32_t wavSeekByteOffset(const WavInfo& info, uint32_t targetMs);
 
 class WavDecoder : public IDecoder {
  public:

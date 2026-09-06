@@ -1,6 +1,6 @@
 # Audio and device architecture
 
-This document describes the audio path of the Cardputer-ADV MP3/WAV player.
+This document describes the audio path of the Cardputer-ADV MP3/WAV/FLAC player.
 The path goes from the SD card to the speaker or to the 3.5 mm jack.
 
 This document describes the current firmware.
@@ -97,14 +97,15 @@ product:
                              │
           ┌──────────────────┼──────────────────┐
           ▼                  ▼                  ▼
-   Mp3Decoder          WavDecoder          SdBrowser
-   (minimp3)           (PCM 16-bit)        next/prev path
+   Mp3Decoder         WavDecoder/          SdBrowser
+   (minimp3)          FlacDecoder         next/prev path
           │                  │
           └────────┬─────────┘
                    │ int16 stereo frames
                    ▼
             AudioOut::write()
-                   │  digital gain (curve × boost)
+                   │  stereo mean, bounded Q15 gain
+                   │  duplicate mono into both I2S slots
                    ▼
             i2s_write(I2S_NUM_0)
                    │
@@ -137,6 +138,10 @@ product:
   It reads data from the SD card and produces PCM samples.
 - **`WavDecoder`** supports 16-bit PCM WAV only.
   It copies each mono sample to both stereo channels.
+- **`FlacDecoder`** uses the pinned **dr_flac** library.
+  It checks native FLAC limits and produces stereo 16-bit PCM.
+- **`DecoderInput`** supplies shared file operations for MP3 and FLAC.
+  Firmware uses `SdInput`. Native checks can supply borrowed fixture input.
 - **`AudioOut`** (`src/audio_out.cpp`) initializes the ES8311 over I2C.
   It transmits audio as an I2S master. It applies gain to PCM samples.
   It can play a test tone.
@@ -150,41 +155,48 @@ product:
 
 ## 3. Playback data path (runtime)
 
-1. The user selects a file. `App::playSelection()` calls `Player::open(absPath)`.
-2. `Player::open`:
-   - stops the previous audio task
-   - stores the path and the name
-   - creates the FreeRTOS task `"audio"` pinned to **core 0**, with stack
-     `cfg::kAudioTaskStack` (24 KiB) and priority `cfg::kAudioTaskPrio`
-3. **Audio task** (`Player::audioTaskMain`):
-   - opens the decoder on this task. minimp3 needs stack space. This
-     protects the loopTask stack from overflow.
-   - reads the `AudioFormat` data (sample rate, duration, channels)
-   - calls `AudioOut::setSampleRate(hz)`. This reinstalls I2S when the rate
-     changes.
-   - loop:
-     - checks the `paused_`, `stopReq_`, and `seekDeltaMs_` atomic variables
-     - calls `decoder_->decode(pcmBuf_, 512, &got)`
-     - calls `out_->write(pcmBuf_, got)` to scale PCM samples and send them through `i2s_write`
-     - sets `Done` when the decoder reports `Finished`
-     - sets `autoNextPending_` if Auto-next is ON
-4. **Loop task** `Player::service()`:
-   - calls `nextTrack()` when an automatic track change is pending
-   - calls `open()` if the search finds a next track
-5. `App` saves `last_path` when the playing path changes.
+1. `App::playSelection()` calls `Player::open(absPath)`.
+2. `Player::open()` waits for the previous task to release its resources.
+   It stores the UI-owned path and name and clears the published track values.
+   It starts one core-0 task with a 24576-byte stack.
+3. The audio task opens the decoder and publishes its format.
+   It sets the I2S rate and applies the latest requested volume.
+4. Each loop applies control requests, decodes stereo PCM, and writes the output.
+   A complete output write permits position publication.
+   A short or failed write produces an output error.
+5. The task closes its decoder before it releases resource ownership.
+   It preserves final published track values.
+6. `Player::service()` consumes Auto-next only after resource completion.
+   Track selection remains in the application loop.
 
-### 3.1 Playback controls
+### 3.1 Playback controls and publication
 
-The audio task performs I2S writes. The controls use atomic variables:
+The UI sends atomic stop, pause, seek, and volume requests.
+Only the audio task changes active output state or accesses decoder resources.
+The audio task applies volume and seek requests even while paused.
+The UI toggles the requested pause value, not the delayed published state.
 
-- `stopReq_` requests that the audio task stop.
-- `paused_` makes the task wait with a short delay and no PCM output.
-- `seekDeltaMs_` stores the total relative seek adjustment. The decode loop applies it.
-- `autoNextPending_` tells the application loop that a track ends with Auto-next enabled.
-  The loop starts the next file if one exists.
+Snapshots read atomic state, format, position, and requested volume.
+Individual fields can come from adjacent audio-loop iterations.
+The snapshot is not an atomic copy of all fields together.
+The UI consumes an error enum once and converts it to display text.
 
-`Player` sends the volume setting to `AudioOut`.
-`AudioOut` calculates the gain factors.
+Pause stops new PCM production and lets queued audio finish.
+Seek resets the I2S stream before it moves the decoder.
+The reset reinstalls the driver at the current rate.
+This clears driver-owned queued data but allocates on each seek.
+A paused seek stays paused.
+
+Explicit stop discards old output before resource release.
+Natural EOF writes one DMA ring of silence before resource release.
+This advances the queued tail before a later rate change.
+An output failure prevents Auto-next.
+
+`stop()` waits for an acquire load of the task completion flag.
+The task's release store is its final access to Player.
+The idle task can reclaim the FreeRTOS stack later.
+I2S writes use a finite timeout, but an SD driver stall can still delay stop.
+The application never closes SD under a live decoder task to escape a timeout.
 
 ---
 
@@ -198,6 +210,12 @@ The audio task performs I2S writes. The controls use atomic variables:
 - DMA: 8 buffers × 256 samples
 - Default rate: **44100** Hz. The code reconfigures the rate per track (for
   example 48000 or 22050).
+
+Normal rate changes use `i2s_set_clk()` without reinstalling the driver.
+A failed rate change gets one complete reinstall attempt.
+If that attempt fails, playback reports an output error.
+Each 128-frame write uses a 100 ms driver timeout.
+This timeout is not a bound on a full track operation or an SD access.
 
 ### 4.2 ES8311 init sequence
 
@@ -224,36 +242,43 @@ This gives one volume curve for both outputs.
 
 ## 5. Volume model
 
-The UI has one volume control from 0 to 100%. The step is
-`kVolumeStepPercent` (default 2%).
+The UI has one volume control from 0 to 100%.
+The default is 30%. The step is 2%.
+The player applies saved volume values without conversion.
+
+`AudioOut::write()` computes the mean of each stereo frame.
+It applies Q15 gain to that mean and writes the result into both I2S slots.
+Both divisions truncate toward zero.
 
 ```text
-effective_sample = clamp16(
-    sample * (UI/100)^exp * kVolPcmBoost
-)
+mono = (int32(left) + int32(right)) / 2
+gainQ15 = clamp(UI, 0, 100)^4 * 32768 / 100000000
+output = mono * gainQ15 / 32768
+I2S left = output
+I2S right = output
 ```
 
-`AudioOut::recomputeMul()` implements the factor as the integer fraction
-`mulNum_ / mulDen_`:
+The gain calculation uses 64-bit integers to prevent intermediate overflow.
+Q15 precision rounds settings from 1% through 7% to zero.
+The gain does not decrease as the UI setting increases.
 
-- `exp = kVolCurveExpNum` (**3**, cubic). The curve permits small volume changes at low headphone levels.
-- `boost = kVolPcmBoost` (**3**). The boost increases output at high speaker levels.
-- During playback, the DAC register stays at `0xBF`.
+Gain stays between zero and unity.
+Mute produces zero. 100% preserves the mono sample.
+Identical channels keep their level before gain.
+Opposite channels cancel in the mono output.
+The implementation does not add PCM boost or write codec gain on volume changes.
+The DAC register stays at `0xBF` during playback.
 
-Approximate levels:
+The fourth-power curve moves the headphone range toward the middle of the UI scale.
+A 50% setting matches 25% on the previous quadratic curve.
+A 55% setting approximately matches the previous 30%.
+The maximum gain at 100% stays unchanged.
+Start headphone checks at a low setting.
+Bounded PCM does not rule out analog distortion or unsafe headphone levels.
+The user defers hardware listening comparisons.
 
-- **UI ~10–45** — headphones, quiet listening
-- **UI ~55–80** — speaker
-- **UI ~85–100** — loud speaker. Audio with loud mastering can clip. The
-  samples saturate.
-
-Default UI volume: **30%**.
-
-The player prints this serial message on change:
-
-```text
-[audio] ui=30% eff~…% (×num/den)
-```
+Host checks cover all 65536 sample values at all 101 volume settings.
+The checks confirm bounded output, mute, unity, and identical-channel preservation.
 
 ---
 
@@ -261,20 +286,79 @@ The player prints this serial message on change:
 
 ### MP3 (`Mp3Decoder` + minimp3)
 
-- Streams from the SD card in chunks
-- Always outputs stereo int16 frames to `AudioOut`
-- Seek is approximate. Accuracy depends on the byte/time map of the decoder
-  implementation.
+- The decoder uses a heap-backed 16 KiB input window without PSRAM.
+- Native tests and firmware use the same minimp3 decode loop.
+  A positive short read is not EOF.
+  A read failure before file end produces an error.
+- The stream excludes a trailing ID3v1 tag.
+  Complete final frames and short zero padding finish without an error.
+  Nonzero junk produces a controlled error.
+- Each decode call has a compressed-byte work limit.
+  `NeedMore` permits another call when scanning or seek pre-roll needs more work.
+- The decoder retains pending PCM between calls and returns stereo int16 frames.
+  Mono expansion uses both output slots.
+- Position counts frames delivered to the caller, not prefetched frames.
+  Player publishes it after output delivery.
+  Queued DMA means this position can lead the sound at the DAC.
+- Valid Xing/Info frame counts supply frame-based duration.
+  A bounded header scan supplies a fallback estimate.
+  The time row marks an estimated duration with `~`.
+  Unknown duration remains `--:--`.
+- A usable Xing TOC supplies approximate time-to-byte mapping.
+  Otherwise seek uses a bounded linear estimate.
+  Nonzero seeks decode preceding frames within one input window to warm the reservoir.
+  Seek-to-zero keeps the original beginning.
+  These operations do not provide indexed, sample-exact, or gapless playback.
 
 ### WAV (`WavDecoder`)
 
-- Supports PCM **16-bit** only
-- Duplicates mono to the left and right channels
-- The decoder rejects non-PCM data and invalid headers.
-  `Player::takeError()` supplies the error message. `App` displays the message.
+- The decoder supports mono and stereo 16-bit PCM.
+  It duplicates mono into stereo output.
+- File access and native tests share one bounded RIFF chunk parser.
+  Metadata size does not set parser memory use.
+  Data can start beyond 512 bytes or appear before `fmt `.
+- The parser checks RIFF, chunk, padding, and whole-frame boundaries.
+  It rejects unsupported formats and inconsistent PCM fields.
+- Duration and seek use shared 64-bit arithmetic.
+  Seek clamps to the data region before narrowing and aligns to a whole frame.
+  Failed seeks do not change position.
+  Short PCM reads report complete frames and then an error.
 
-The player rejects unsupported file extensions.
-The browser lists `.mp3` and `.wav` audio files.
+### FLAC (`FlacDecoder` + dr_flac)
+
+- The decoder supports native FLAC with one or two channels.
+  Input uses 16 or 24 bits per sample at 8000 through 48000 Hz.
+  Output uses stereo int16. Mono samples fill both channels.
+  Conversion from 24 bits discards the low eight bits.
+- STREAMINFO must declare a maximum block size from 16 through 4608 frames.
+  The sample count must be known and nonzero.
+  Duration must fit 32-bit milliseconds.
+  The decoder checks these fields before it opens the library.
+- The library uses a bounded allocator with a 64 KiB payload limit.
+  Its decoded sample buffer and seek table share that limit.
+  The small adapter state, allocation headers, SD state, and task stack are separate.
+  The decoder does not allocate a second full-block PCM buffer.
+- Open and each decode call have a 64 KiB read limit.
+  Seek has a 256 KiB read limit.
+  Resource-limit failures stop playback, even for otherwise valid files.
+  Positive short reads continue. A zero read before file end is an error.
+- Each decoded frame must match the stream format and sample timeline.
+  CRC checks stay enabled. A skipped frame produces an error instead of shifted audio.
+  Fixed-block frame numbers use the STREAMINFO maximum block size.
+  Files that do not fit this mapping produce an error.
+- Position counts delivered frames, not library read-ahead.
+  Seek uses the declared sample timeline and discards old output through Player.
+  Seek to the displayed end finishes without decoding the skipped audio.
+  A failed seek preserves the last delivered position and stops the decoder.
+  Large sample jumps reset the library first to avoid its 32-bit seek shortcut.
+  Only close/open clears a decoder error.
+- Unused metadata is skipped. The adapter does not decode album art.
+  The pinned revision and checksum are in `lib/dr_flac/provenance.txt`.
+  Ogg FLAC is disabled.
+
+The browser lists `.mp3`, `.wav`, and `.flac` audio files.
+Unsupported extensions do not open.
+Hardware listening and seek-accuracy checks remain unverified.
 
 ---
 
@@ -283,7 +367,7 @@ The browser lists `.mp3` and `.wav` audio files.
 | Context | Core | Work |
 |---------|------|------|
 | Arduino `loop` / UI | 1 (typical) | keys, display, settings, `service()` |
-| FreeRTOS `"audio"` | **0** | open decoder, decode, I2S write |
+| FreeRTOS `"audio"` | **0** | open/seek/close decoder, decode, output controls and I2S writes |
 | I2S DMA / IDF | — | background DMA to GPIO |
 
 The decode step does not run on the UI task:
@@ -296,7 +380,7 @@ The decode step does not run on the UI task:
 
 ## 8. Track navigation
 
-- **Auto-next** — if enabled, the player starts the next `.mp3` or `.wav`
+- **Auto-next** — if enabled, the player starts the next `.mp3`, `.wav`, or `.flac`
   in the playing track's folder after the decoder reports `Finished`.
   The browser sorts the listing. It places directories first.
   Next and previous track searches skip directories.
@@ -317,11 +401,11 @@ The decode step does not run on the UI task:
 
 ## 9. Key source files
 
-- `include/config.hpp` — pins, volume curve settings, task stack and
-  priority
+- `include/config.hpp` — pins, buffer limits, task stack, and priority
 - `src/audio_out.cpp` — ES8311 + I2S + PCM gain
+- `src/audio_dsp.cpp` — stereo mean and bounded Q15 gain
 - `src/player.cpp` — task lifecycle, decode loop, next/prev
-- `src/decoders/*` — MP3/WAV
+- `src/decoders/*` — MP3/WAV/FLAC and shared input operations
 - `src/sd_browser.cpp` — SD mount + listing + siblings
 - `src/settings.cpp` — persistent settings, last path, and browser location
 - `src/app.cpp` — connects UI controls to player/settings
@@ -330,15 +414,48 @@ The decode step does not run on the UI task:
 
 ## 10. Design choices (summary)
 
-1. **Custom decode implementation.** The player uses minimp3 and a WAV decoder
+1. **Direct decoder integration.** The player uses minimp3, dr_flac, and a WAV decoder
    instead of ESP32-audioI2S. This gives direct control of PCM and volume.
 2. **Software volume.** The DAC volume stays fixed during playback.
    One software curve controls both outputs. The player does not have separate output profiles.
 3. **Hardware speaker mute.** The ADV hardware controls the mute.
    The firmware does not drive G46.
 4. **Separate audio task.** Decoding runs on core 0.
-   This task provides stack space for minimp3.
+   This task provides stack space for decoder operations.
 5. **Settings on the SD card** (`/.asvmp3/`). Settings survive a firmware
    update. A PC can read the file.
 
 ---
+
+## 11. Baseline diagnostics
+
+`AUDIO_DIAG` defaults to zero in `include/config.hpp`.
+The `cardputer-adv-diag` environment sets it to one.
+Both firmware environments use M5Cardputer 1.1.1, M5Unified 0.2.18,
+and M5GFX 0.2.25. M5GFX uses its release commit because version 0.2.25
+is not available from the PlatformIO registry used for this build.
+
+The audio task logs format and source channels when it opens a decoder.
+`AudioFormat::channels` keeps its existing meaning.
+`sourceChannels` reports the input channel count.
+The task records the maximum decode duration with unsigned `micros()` subtraction.
+Open and exit logs include free and minimum internal heap, the largest free
+internal block, and the current task's stack high-water mark in bytes.
+These values do not measure the space left on the UI task's stack.
+
+The output logs failed or short I2S writes.
+Decoder diagnostics include file byte positions when a frame or read fails.
+Seek logs show the old, requested, and returned positions, plus elapsed microseconds.
+Each seek log includes a heap and stack snapshot.
+Output and decoder failures stop playback and prevent Auto-next.
+ES8311 register reads do not add writes or change initialization values.
+`i2s_get_clk()` reports the configured rate. Use a logic analyzer to measure
+LRCK and BCLK.
+
+Diagnostic timers, memory queries, and diagnostic log messages compile out when
+`AUDIO_DIAG=0`. Diagnostics do not change the volume curve, stereo slots,
+DMA sizes, decoder buffers, or task ownership.
+Normal builds keep output error messages.
+The host fixture generator and check command are in `README.md`.
+The initial 44.1 kHz baseline log remains available.
+The user defers further hardware validation.

@@ -6,6 +6,11 @@
 #include <freertos/FreeRTOS.h>
 #endif
 
+// The cardputer-adv-diag environment overrides this with -DAUDIO_DIAG=1.
+#ifndef AUDIO_DIAG
+#define AUDIO_DIAG 0
+#endif
+
 namespace cfg {
 
 constexpr int kScreenW = 240;
@@ -57,15 +62,6 @@ constexpr int kDefaultVolumePercent = 30;
 constexpr uint32_t kToastMs = 1500;
 constexpr uint32_t kBrowserLocationSaveDelayMs = 750;
 
-// Volume scale: soft% = (UI/100)^exp * 100, then PCM × boost.
-// The cubic curve permits small volume changes at low headphone levels.
-// The boost increases output at high speaker levels.
-// UI→soft% (before ×3 boost): 10→0.1%, 20→0.8%, 30→2.7%, 40→6.4%,
-// 50→12.5%, 60→21.6%, 70→34%, 80→51%, 90→73%, 100→100%.
-// Suggested settings: 10–45 for headphones, 55–80 for the speaker, 85–100 for high speaker volume.
-constexpr int kVolCurveExpNum = 3;
-constexpr int kVolPcmBoost = 3;
-
 // Audio task
 constexpr uint32_t kDefaultSampleRate = 44100;
 constexpr int kAudioTaskStack = 24576;
@@ -75,7 +71,11 @@ constexpr UBaseType_t kAudioTaskPrio = 5;
 constexpr unsigned kAudioTaskPrio = 5;
 #endif
 constexpr size_t kPcmRingFrames = 4096;
-constexpr size_t kCompressedBuf = 4096;
+constexpr size_t kCompressedBuf = 16 * 1024;
+constexpr size_t kFlacHeapBudget = 64 * 1024;
+constexpr uint16_t kFlacMaxBlockFrames = 4608;
+constexpr size_t kFlacDecodeReadBudget = 64 * 1024;
+constexpr size_t kFlacSeekReadBudget = 256 * 1024;
 constexpr bool kBootBeep = false;
 
 }  // namespace cfg
