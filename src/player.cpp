@@ -50,7 +50,8 @@ void Player::waitTaskGone() {
 }
 
 bool Player::open(const char* absPath) {
-  if (!out_ || !absPath || absPath[0] == '\0') return false;
+  if (!out_ || !absPath || absPath[0] == '\0' ||
+      std::strlen(absPath) >= sizeof(currentPath_)) return false;
 
   // Stop previous track on the audio task — do NOT open decoders on loopTask.
   stop();

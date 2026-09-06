@@ -79,6 +79,17 @@ Practical tips if you see **No SD card**:
 
 Any folder tree works; the browser starts at SD root. Hidden `.*` names are skipped.
 
+File and folder names use UTF-8. The browser and player use the bundled
+`efontJA_10` font for these names. It includes Russian letters (`Ё` and `ё`),
+Japanese characters, and other Unicode characters. Characters outside the font
+use a missing-glyph box. The font does not cover all Unicode characters.
+Long labels end with `...` at a complete UTF-8 character boundary.
+
+Names and absolute paths must fit in 255 UTF-8 bytes, not 255 characters.
+The browser skips names above this limit and shows `* truncated`.
+It rejects folder paths above the limit. The player rejects track paths above
+the limit. The browser stores at most 256 entries per folder.
+
 Settings live on the card in a hidden directory:
 
 ```text

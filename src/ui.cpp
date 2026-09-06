@@ -4,6 +4,19 @@
 #include <cstdio>
 #include <cstring>
 
+static void drawFileText(char* text, int x, int y) {
+  auto& d = M5Cardputer.Display;
+  const auto* previousFont = d.getFont();
+  d.setFont(&fonts::efontJA_10);
+  const int width = cfg::kScreenW - x - 2;
+  if (d.textWidth(text) > width) {
+    const int end = d.textLength(text, width - d.textWidth("...") + 1);
+    std::strcpy(text + end, "...");
+  }
+  d.drawString(text, x, y);
+  d.setFont(previousFont);
+}
+
 void Ui::begin() {
   applyTheme(themes::get(0));
   auto& d = M5Cardputer.Display;
@@ -11,6 +24,7 @@ void Ui::begin() {
   d.setBrightness(cfg::kDisplayBrightness);
   d.fillScreen(theme_.bg);
   d.setTextSize(1);
+  d.setAttribute(lgfx::attribute_t::utf8_switch, true);
   hasLastBrowse_ = false;
   hasLastPlayer_ = false;
   hasLastSettings_ = false;
@@ -228,13 +242,7 @@ void Ui::drawBrowse(const BrowseSnapshot& b, bool full) {
     d.setTextColor(theme_.dim, theme_.bg);
     char pathBuf[cfg::kMaxPathLen + 4];
     snprintf(pathBuf, sizeof(pathBuf), "SD:%s", b.path);
-    if (strlen(pathBuf) > 38) {
-      pathBuf[35] = '.';
-      pathBuf[36] = '.';
-      pathBuf[37] = '.';
-      pathBuf[38] = '\0';
-    }
-    d.drawString(pathBuf, 2, 1);
+    drawFileText(pathBuf, 2, 1);
   }
 
   const int listY = 12;
@@ -289,7 +297,7 @@ void Ui::drawBrowse(const BrowseSnapshot& b, bool full) {
       } else {
         snprintf(rowBuf, sizeof(rowBuf), "%s", b.entries[idx].name);
       }
-      d.drawString(rowBuf, 4, y + 2);
+      drawFileText(rowBuf, 4, y + 2);
     } else {
       d.fillRect(0, y, cfg::kScreenW, cfg::kListRowH, theme_.bg);
     }
@@ -371,7 +379,9 @@ void Ui::drawPlaying(const PlayerSnapshot& p, bool full) {
 
   if (full || std::strcmp(p.fileName, lastPlayer_.fileName) != 0) {
     d.fillRect(0, 20, cfg::kScreenW, 16, theme_.bg);
-    d.drawString(p.fileName, 4, 20);
+    char nameBuf[cfg::kMaxNameLen];
+    snprintf(nameBuf, sizeof(nameBuf), "%s", p.fileName);
+    drawFileText(nameBuf, 4, 20);
   }
 
   drawPlayingProgress(p);

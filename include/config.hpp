@@ -40,7 +40,7 @@ constexpr uint32_t kDisplayTimeoutMs = 10000;
 // Browser / player
 constexpr size_t kMaxDirEntries = 256;
 constexpr size_t kMaxPathLen = 256;
-constexpr size_t kMaxNameLen = 64;
+constexpr size_t kMaxNameLen = kMaxPathLen;
 // Finer steps so the expanded quiet zone is usable (HP lives in low UI).
 constexpr int kVolumeStepPercent = 2;
 constexpr int kSeekStepSeconds = 5;

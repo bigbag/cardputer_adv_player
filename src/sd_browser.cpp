@@ -153,6 +153,10 @@ bool SdBrowser::listCurrent() {
     }
 
     if (!isDir && !isAudioName(name)) continue;
+    if (std::strlen(name) >= cfg::kMaxNameLen) {
+      truncated_ = true;
+      continue;
+    }
 
     if (count_ >= cfg::kMaxDirEntries) {
       truncated_ = true;
@@ -195,6 +199,10 @@ bool SdBrowser::listCurrentArduino() {
     const char* name = slash ? slash + 1 : p;
     if (!name || name[0] == '\0' || name[0] == '.') continue;
     if (!isDir && !isAudioName(name)) continue;
+    if (std::strlen(name) >= cfg::kMaxNameLen) {
+      truncated_ = true;
+      continue;
+    }
 
     if (count_ >= cfg::kMaxDirEntries) {
       truncated_ = true;
@@ -246,7 +254,7 @@ bool SdBrowser::up() {
 }
 
 bool SdBrowser::openPathInternal(const char* absPath, bool clearHistory) {
-  if (!isAbsolutePath(absPath)) return false;
+  if (!isAbsolutePath(absPath) || std::strlen(absPath) >= sizeof(path_)) return false;
 
   char oldPath[cfg::kMaxPathLen];
   std::strncpy(oldPath, path_, sizeof(oldPath) - 1);
