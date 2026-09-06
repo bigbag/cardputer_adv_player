@@ -5,6 +5,7 @@
 class Input {
  public:
   void begin();
-  // screen-aware: ;/. = Up/Down in Browse, Prev/Next track while Playing.
+  // Key meaning depends on the screen: ; and . move the cursor in Browse and
+  // change tracks while Playing.
   Action poll(Screen screen);
 };

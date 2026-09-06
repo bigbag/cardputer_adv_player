@@ -35,9 +35,8 @@ bool AudioOut::esInitRegisters() {
   return true;
 }
 
-// High-precision: out = in * (UI/100)^exp * boost
-// = in * UI^exp * boost / 100^exp
-// Keeps quiet-zone steps distinct (integer soft% crushed 0–25 into one step).
+// Gain: out = in * (UI/100)^exp * boost = in * UI^exp * boost / 100^exp.
+// Fractional gain preserves volume differences at low settings.
 void AudioOut::recomputeMul() {
   int v = volume_;
   if (v < 0) v = 0;
@@ -58,7 +57,7 @@ void AudioOut::recomputeMul() {
   }
   num *= cfg::kVolPcmBoost;
 
-  // Reduce fraction a bit to fit int32 multiply path
+  // Reduce the fraction so num and den fit in int32.
   while (num > 2000000000LL || den > 2000000000LL) {
     num /= 2;
     den /= 2;
@@ -73,7 +72,8 @@ void AudioOut::applyVolume() {
   recomputeMul();
   esWrite(0x32, 0xBF);
 
-  // Log effective % of full-scale after curve+boost (100% UI with boost3 → 300%)
+  // Calculate the gain as a percentage of full scale.
+  // A 100% volume setting with a boost of 3 gives 300%.
   const int effPct = (volume_ <= 0)
                          ? 0
                          : static_cast<int>((100LL * mulNum_) / mulDen_);

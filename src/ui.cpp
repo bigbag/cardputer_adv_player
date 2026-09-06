@@ -47,7 +47,7 @@ void Ui::setDisplayOn(bool on) {
   displayOn_ = on;
   auto& d = M5Cardputer.Display;
   if (on) {
-    // brightness restored by App via setBrightness after wake
+    // App restores the brightness through setBrightness after wake.
     hasLastBrowse_ = false;
     hasLastPlayer_ = false;
     hasLastSettings_ = false;
@@ -147,7 +147,7 @@ bool Ui::render(Screen screen,
     return false;
   }
 
-  // Live theme from settings (changes apply immediately in Settings screen).
+  // Read the selected theme from settings. Apply theme changes immediately.
   bool themeChanged = false;
   if (theme_.name != settings.theme().name) {
     applyTheme(settings.theme());
@@ -420,7 +420,6 @@ void Ui::drawSettings(const Settings& s) {
     snprintf(line, sizeof(line), "%s", s.label(i));
     d.drawString(line, 4, y + 3);
 
-    // value right-ish
     const int vw = static_cast<int>(strlen(val)) * 6;
     d.drawString(val, cfg::kScreenW - 4 - vw, y + 3);
   }

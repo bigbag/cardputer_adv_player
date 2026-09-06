@@ -21,7 +21,7 @@ class AudioOut {
   bool i2sStart(uint32_t rate);
   void i2sStop();
   void applyVolume();
-  // sample * mulNum_ / mulDen_  (high-res curve + boost)
+  // Sample gain: sample * mulNum_ / mulDen_ (high-resolution curve + boost).
   void recomputeMul();
 
   uint32_t rate_ = 0;

@@ -23,12 +23,12 @@ class App {
   void openSettings();
   void closeSettings();
   void applySettings();
-  void persistSettings();  // apply + write SD immediately
-  void rememberLastPath(const char* absPath);  // cfg last_path + save
+  void persistSettings();  // Apply settings. Write the config file immediately.
+  void rememberLastPath(const char* absPath);  // Set last_path and request a save.
   void rememberBrowserLocation();
   void flushBrowserLocation(bool showError);
   void restoreBrowserLocation();
-  void resumeLastTrack();  // after boot: play if configured and present
+  void resumeLastTrack();  // Play the saved track at boot if the mode permits playback.
   void playSelection();
   void noteActivity(uint32_t nowMs);
   void updateDisplayPower(uint32_t nowMs);

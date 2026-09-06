@@ -24,7 +24,7 @@ struct BrowseSnapshot {
 
 struct BrowserLocation {
   char path[cfg::kMaxPathLen];
-  char item[cfg::kMaxNameLen];  // selected visible entry; empty for no selection
+  char item[cfg::kMaxNameLen];  // selected visible entry; empty means no selection
 };
 
 struct PlayerSnapshot {
@@ -44,8 +44,8 @@ struct Toast {
 struct SettingsSnapshot {
   int volumePercent;
   uint8_t brightness;
-  uint32_t displayTimeoutMs;  // 0 = never
-  uint32_t idleTimeoutMs;  // 0 = never
+  uint32_t displayTimeoutMs;  // 0 disables the timeout
+  uint32_t idleTimeoutMs;  // 0 disables the timeout
   bool autoNext;
   OnBootMode onBoot;
   size_t themeIndex;

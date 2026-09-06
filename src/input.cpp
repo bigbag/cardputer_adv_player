@@ -4,14 +4,14 @@
 void Input::begin() {}
 
 Action Input::poll(Screen screen) {
-  // M5Cardputer.update() must have been called (App::loop does this).
+  // The caller must call M5Cardputer.update() before poll. App::loop does this.
   if (!M5Cardputer.Keyboard.isChange() || !M5Cardputer.Keyboard.isPressed()) {
     return Action::None;
   }
 
   const Keyboard_Class::KeysState& st = M5Cardputer.Keyboard.keysState();
 
-  // Special keys are NOT in st.word.
+  // Special keys are not part of st.word.
   if (st.enter) {
     return Action::Enter;
   }
@@ -25,10 +25,12 @@ Action Input::poll(Screen screen) {
     return Action::Settings;
   }
 
-  // Cardputer diamond cluster (physical):
-  //        ;          Browse: Up/Down     Playing: Prev/Next track
+  // Physical diamond cluster on the Cardputer keyboard:
+  //        ;
   //     ,  .  /
-  //   left down right   (, / = volume)
+  // ; = up in Browse, previous track while Playing
+  // . = down in Browse, next track while Playing
+  // , = volume down, / = volume up
   const bool playing = (screen == Screen::Playing);
   for (char key : st.word) {
     switch (key) {
@@ -37,9 +39,9 @@ Action Input::poll(Screen screen) {
       case '.':
         return playing ? Action::NextTrack : Action::Down;
       case ',':
-        return Action::VolDown;   // left  = decrease
+        return Action::VolDown;
       case '/':
-        return Action::VolUp;     // right = increase
+        return Action::VolUp;
       case '[':
         return Action::SeekBack;
       case ']':
@@ -52,7 +54,7 @@ Action Input::poll(Screen screen) {
       case 's':
       case 'S':
         return Action::Settings;
-      // Optional extras still work
+      // Extra alias keys.
       case '=':
       case '+':
         return Action::VolUp;
@@ -65,7 +67,8 @@ Action Input::poll(Screen screen) {
         break;
       case 'p':
       case 'P':
-        // Browse ↔ Playing when a track is loaded (not prev — use ';')
+        // Request a switch between Browse and Playing.
+        // Use ';' for the previous track.
         return Action::TogglePlayer;
       default:
         break;

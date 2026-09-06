@@ -12,9 +12,9 @@ enum class Action : uint8_t {
   VolDown,
   SeekFwd,
   SeekBack,
-  NextTrack,  // play mode: next audio in folder
-  PrevTrack,  // play mode: prev / restart current
-  TogglePlayer,  // Browse ↔ Playing when a track is loaded
+  NextTrack,  // Select the next audio file in the playing track's folder.
+  PrevTrack,  // Select the previous track or restart the current track.
+  TogglePlayer,  // Switch between Browse and Playing if the player has a track.
   RetrySd,
-  Settings,  // open settings (Tab or 's')
+  Settings,  // Open Settings with Tab or S.
 };

@@ -9,9 +9,12 @@
 #include <SD.h>
 #include <FS.h>
 
-// Papyrix-style persistence:
-//   mkdir hidden dir → write *.tmp → flush/sync → size check → remove final → rename tmp
-// Keeps a half-written file from wiping good settings.
+// Save settings through a temporary file.
+// Create the directory if necessary.
+// Write the temporary file. Flush the file.
+// Check the write count and file size.
+// Remove the old file. Rename the temporary file.
+// A power loss during replacement can remove the previous settings.
 
 static constexpr const char* kConfigTmp = "/.asvmp3/config.cfg.tmp";
 static constexpr uint32_t kIdleTimeouts[] = {0, 300000, 1800000, 3600000};
@@ -64,7 +67,7 @@ bool Settings::parseLine(const char* line) {
   if (!eq) return false;
 
   char key[24];
-  // Paths need up to kMaxPathLen; other values are short.
+  // Paths need space for kMaxPathLen bytes. Other values are short.
   char val[cfg::kMaxPathLen];
   size_t klen = static_cast<size_t>(eq - line);
   while (klen > 0 && std::isspace(static_cast<unsigned char>(line[klen - 1]))) --klen;
@@ -114,7 +117,7 @@ bool Settings::parseLine(const char* line) {
                std::strcmp(val, "false") == 0 || std::strcmp(val, "0") == 0) {
       onBoot_ = OnBootMode::Off;
     } else {
-      // play, resume, unknown → Play (safe default / legacy)
+      // "play", "resume", and unknown values select Play for legacy compatibility.
       onBoot_ = OnBootMode::Play;
     }
   } else if (std::strcmp(key, "theme") == 0) {
@@ -167,7 +170,7 @@ bool Settings::parseLine(const char* line) {
 void Settings::load() {
   applyDefaults();
 
-  // Prefer hidden path; migrate legacy root file if present.
+  // Prefer the hidden path. Migrate the legacy root file when it exists.
   const char* path = kConfigPath;
   if (!SD.exists(path) && SD.exists("/asvmp3.cfg")) {
     path = "/asvmp3.cfg";
@@ -221,7 +224,7 @@ void Settings::load() {
                 static_cast<unsigned long>(displayTimeoutMs_),
                 themes::name(themeIndex_), autoNext_ ? 1 : 0, bootStr);
 
-  // If we loaded legacy path, rewrite to hidden location.
+  // Save to the config directory if the source file uses the legacy path.
   if (path != kConfigPath) {
     save();
     SD.remove("/asvmp3.cfg");
@@ -231,7 +234,7 @@ void Settings::load() {
 bool Settings::save() {
   clamp();
 
-  // 1) Ensure hidden directory exists (FAT "hidden" via leading '.').
+  // Create the config directory. The browser skips names that start with ".".
   if (!SD.exists(kConfigDir)) {
     if (!SD.mkdir(kConfigDir)) {
       Serial.printf("[cfg] SAVE FAIL mkdir %s\n", kConfigDir);
@@ -240,7 +243,7 @@ bool Settings::save() {
     Serial.printf("[cfg] created %s\n", kConfigDir);
   }
 
-  // 2) Write temp file first (never leave a half-written final).
+  // Write the temporary file before replacing the config file.
   if (SD.exists(kConfigTmp)) {
     SD.remove(kConfigTmp);
   }
@@ -251,7 +254,7 @@ bool Settings::save() {
     return false;
   }
 
-  // Explicit content — enough bytes that a short write is obvious.
+  // Count the bytes to detect an incomplete write.
   size_t written = 0;
   auto wr = [&](const char* s) {
     size_t n = std::strlen(s);
@@ -291,12 +294,11 @@ bool Settings::save() {
 
   f.flush();
 #if defined(ESP32)
-  // Best-effort fsync if underlying FsFile exposes it via FILE*
 #endif
   const size_t sz = f.size();
   f.close();
 
-  // Minimum plausible size (header plus settings keys).
+  // Minimum expected size for the header and settings keys.
   constexpr size_t kMinBytes = 40;
   if (!ok || written < kMinBytes || sz < kMinBytes) {
     Serial.printf("[cfg] SAVE FAIL short write %u/%u — discard tmp\n",
@@ -305,7 +307,7 @@ bool Settings::save() {
     return false;
   }
 
-  // 3) Commit: remove stale final, rename tmp → final (SdFat/SD can't always rename-over).
+  // Remove the existing file before rename for SD implementations that do not replace files.
   if (SD.exists(kConfigPath)) {
     if (!SD.remove(kConfigPath)) {
       Serial.printf("[cfg] SAVE FAIL remove old %s\n", kConfigPath);
@@ -314,7 +316,7 @@ bool Settings::save() {
     }
   }
   if (!SD.rename(kConfigTmp, kConfigPath)) {
-    // Fallback: copy if rename unsupported
+    // Copy the file if rename fails.
     Serial.println("[cfg] rename failed — copy fallback");
     File src = SD.open(kConfigTmp, FILE_READ);
     File dst = SD.open(kConfigPath, FILE_WRITE);
@@ -403,7 +405,7 @@ void Settings::toggleAutoNext() { autoNext_ = !autoNext_; }
 void Settings::setOnBoot(OnBootMode m) { onBoot_ = m; }
 
 void Settings::cycleOnBoot(int delta) {
-  // Order: Play(0) → Browse(1) → Off(2)
+  // Cycle order: Play (0), Browse (1), Off (2).
   int i = static_cast<int>(onBoot_) + delta;
   constexpr int n = 3;
   while (i < 0) i += n;

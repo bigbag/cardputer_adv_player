@@ -43,7 +43,7 @@ void Player::closeDecoder() {
 #ifndef UNIT_TEST
 
 void Player::waitTaskGone() {
-  // Audio task clears taskHandle_ then self-deletes.
+  // The audio task clears taskHandle_ and then deletes itself.
   while (taskHandle_ != nullptr) {
     vTaskDelay(pdMS_TO_TICKS(5));
   }
@@ -53,7 +53,7 @@ bool Player::open(const char* absPath) {
   if (!out_ || !absPath || absPath[0] == '\0' ||
       std::strlen(absPath) >= sizeof(currentPath_)) return false;
 
-  // Stop previous track on the audio task — do NOT open decoders on loopTask.
+  // Stop the previous track on the audio task. Do not open decoders on loopTask.
   stop();
 
   std::strncpy(currentPath_, absPath, cfg::kMaxPathLen - 1);
@@ -64,15 +64,15 @@ bool Player::open(const char* absPath) {
   paused_.store(false);
   seekDeltaMs_.store(0);
   autoNextPending_.store(false);
-  state_ = PlayState::Playing;  // "opening" treated as playing for UI
+  state_ = PlayState::Playing;  // The UI shows playback while the decoder opens.
 
-  // Generous stack: minimp3 frame decode + SD read + path copies.
-  const uint32_t stackWords = cfg::kAudioTaskStack;  // bytes in config; FreeRTOS wants words
+  // Allocate stack space for MP3 decoding, SD reads, and path copies.
+  const uint32_t stackWords = cfg::kAudioTaskStack;  // ESP32 measures the stack size in bytes.
   BaseType_t ok = xTaskCreatePinnedToCore(
       audioTaskThunk, "audio",
       stackWords / sizeof(StackType_t),
       this, cfg::kAudioTaskPrio, &taskHandle_,
-      0  // core 0 — leave core 1 for loop/UI
+      0  // Run audio on core 0. Reserve core 1 for the application loop.
   );
   if (ok != pdPASS) {
     taskHandle_ = nullptr;
@@ -100,7 +100,7 @@ void Player::audioTaskThunk(void* arg) {
 }
 
 void Player::audioTaskMain() {
-  // Open decoder HERE (not on loopTask) — minimp3 needs stack headroom.
+  // Open the decoder on the audio task. MP3 decoding needs its larger stack.
   if (!openDecoder(currentPath_)) {
     snprintf(lastError_, sizeof(lastError_), "Can't decode");
     state_ = PlayState::Error;
@@ -158,7 +158,7 @@ void Player::audioTaskMain() {
       state_ = PlayState::Error;
       break;
     }
-    // NeedMore with no samples: yield briefly
+    // Pause the task briefly if the decoder produces no samples.
     if (got == 0) {
       vTaskDelay(pdMS_TO_TICKS(1));
     }
@@ -246,7 +246,7 @@ bool Player::nextTrack() {
 }
 
 bool Player::prevTrack() {
-  // Phone-style: deep into track → restart; near start → previous file.
+  // Restart after kPrevRestartMs. Otherwise, select the previous track.
   if (positionMs() > cfg::kPrevRestartMs) {
     if (currentPath_[0] != '\0') {
       return open(currentPath_);
@@ -257,7 +257,7 @@ bool Player::prevTrack() {
   if (adjacentTrack(false, prevPath, sizeof(prevPath))) {
     return open(prevPath);
   }
-  // Already first track: restart it.
+  // Restart the current track if no previous track exists.
   if (currentPath_[0] != '\0') {
     return open(currentPath_);
   }

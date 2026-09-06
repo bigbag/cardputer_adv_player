@@ -24,8 +24,8 @@ class Player {
   void adjustVolume(int deltaPercent);
   int volumePercent() const { return volume_; }
   void seekRelative(int deltaSeconds);
-  bool nextTrack();  // next audio in current folder; false at end
-  bool prevTrack();  // restart if >kPrevRestartMs, else previous track
+  bool nextTrack();  // next audio file in the current folder; returns false at the end
+  bool prevTrack();  // restarts the track after kPrevRestartMs; otherwise moves to the previous track
   const char* currentPath() const { return currentPath_; }
   void service();
   void setAutoNext(bool on) { autoNextEnabled_ = on; }

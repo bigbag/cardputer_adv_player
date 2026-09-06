@@ -4,13 +4,13 @@
 #include "theme.hpp"
 #include <cstdint>
 
-// All settings live in a plain-text file on the SD card (hidden dir):
-//   /.asvmp3/config.cfg
-// Loaded after SD mount; saved on Settings exit and volume changes.
+// The SD card stores settings in /.asvmp3/config.cfg.
+// App loads settings after the SD mount attempt.
+// App requests a save when a setting changes.
 class Settings {
  public:
-  void load();   // uses defaults if file missing / SD not ready
-  bool save();   // write /.asvmp3/config.cfg ; false if SD unavailable
+  void load();   // Use defaults if the file or SD card is not available.
+  bool save();   // Write /.asvmp3/config.cfg. Return false if the write fails.
 
   SettingsSnapshot snapshot() const;
 
@@ -34,16 +34,17 @@ class Settings {
 
   OnBootMode onBoot() const { return onBoot_; }
   void setOnBoot(OnBootMode m);
-  void cycleOnBoot(int delta);  // +1 / -1 through Play → Browse → Off
+  void cycleOnBoot(int delta);  // +1 selects Play, Browse, Off. -1 reverses the order.
 
   size_t themeIndex() const { return themeIndex_; }
   void setThemeIndex(size_t i);
   void cycleTheme(int delta);
   const Theme& theme() const { return themes::get(themeIndex_); }
 
-  // Absolute SD path of last played audio ("/Music/a.mp3"), or empty.
+  // Return the absolute path of the last track, such as "/Music/a.mp3".
+  // Return an empty string if no path exists.
   const char* lastPath() const { return lastPath_; }
-  void setLastPath(const char* absPath);  // no-op if unchanged
+  void setLastPath(const char* absPath);  // Do nothing if the path does not change.
 
   const BrowserLocation& browserLocation() const { return browserLocation_; }
   void setBrowserLocation(const BrowserLocation& location);

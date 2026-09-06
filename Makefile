@@ -1,10 +1,10 @@
-# Makefile for cardputer_asv_mp3 (M5Stack Cardputer-ADV MP3/WAV player)
-# Wraps PlatformIO commands. Override the launcher if system Python is 3.14+:
-#   make build PIO="python3.12 -m platformio"
+# Build the M5Stack Cardputer-ADV MP3/WAV player with PlatformIO.
+# Select another launcher if the system uses Python 3.14 or later.
+# Example: make build PIO="python3.12 -m platformio"
 
 .PHONY: all build upload flash flash-nostub flash-bootloader clean monitor test test-native size help
 
-# Prefer a PlatformIO-supported Python when plain `pio` is on 3.14+
+# Select a Python version that PlatformIO supports.
 PIO ?= $(shell \
   if command -v pio >/dev/null 2>&1 && pio system info 2>/dev/null | grep -qE 'Python[[:space:]]+3\.(1[0-3])\.'; then \
     echo pio; \
@@ -23,39 +23,40 @@ ENV_NATIVE ?= native
 
 all: help
 
-build: ## Build device firmware (cardputer-adv)
+build: ## Build device firmware for cardputer-adv.
 	$(PIO) run -e $(ENV_DEVICE)
 
-upload: ## Build and flash firmware
+upload: ## Build firmware and upload it to the device.
 	$(PIO) run -e $(ENV_DEVICE) --target upload
 
-flash: upload ## Alias for upload
+flash: upload ## Run the upload target.
 
-flash-nostub: ## Flash without ROM stub (if ACM drops after "Stub running")
+# Use this target if USB-JTAG disconnects after "Stub running".
+flash-nostub: ## Upload without the esptool stub.
 	$(PIO) run -e cardputer-adv-nostub --target upload
 
-flash-bootloader: ## Flash after manual download mode (see help)
+flash-bootloader: ## Upload after you manually select download mode.
 	@echo "1) Power OFF"
 	@echo "2) Hold G0, power ON, release G0"
 	@echo "3) Confirm /dev/ttyACM0 exists, then Enter"
 	@read _
 	$(PIO) run -e $(ENV_DEVICE) --target upload --upload-port /dev/ttyACM0
 
-clean: ## Clean PlatformIO build artifacts
+clean: ## Remove PlatformIO build output.
 	$(PIO) run -e $(ENV_DEVICE) --target clean
 
-monitor: ## Open serial monitor (115200)
+monitor: ## Open the serial monitor at 115200 baud.
 	$(PIO) device monitor -b 115200
 
-test: test-native ## Run host unit tests
+test: test-native ## Run the host unit tests.
 
-test-native: ## Run native (host) Unity tests
+test-native: ## Run the native Unity tests.
 	$(PIO) test -e $(ENV_NATIVE)
 
-size: ## Show firmware size
+size: ## Show firmware size.
 	$(PIO) run -e $(ENV_DEVICE) --target size
 
-help: ## Show this help
+help: ## Show command help.
 	@echo "cardputer_asv_mp3 — Cardputer-ADV MP3/WAV player"
 	@echo "  PIO launcher: $(PIO)"
 	@echo "  Device env:   $(ENV_DEVICE)"

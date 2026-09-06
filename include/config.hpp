@@ -16,7 +16,8 @@ constexpr int kI2cSda = 8;
 constexpr int kI2cScl = 9;
 
 // ES8311 / I2S (Cardputer-ADV)
-// G41=BCLK, G43=LRCK, G42=DSDIN. Jack mutes speaker in hardware (no MCU detect).
+// G41=BCLK, G43=LRCK, G42=DSDIN.
+// The jack mutes the speaker in hardware. The MCU cannot detect the mute.
 constexpr int kI2sBclk = 41;
 constexpr int kI2sLrck = 43;
 constexpr int kI2sDout = 42;
@@ -41,22 +42,23 @@ constexpr uint32_t kDisplayTimeoutMs = 10000;
 constexpr size_t kMaxDirEntries = 256;
 constexpr size_t kMaxPathLen = 256;
 constexpr size_t kMaxNameLen = kMaxPathLen;
-// Finer steps so the expanded quiet zone is usable (HP lives in low UI).
+// Small volume steps permit adjustment at low headphone levels.
 constexpr int kVolumeStepPercent = 2;
 constexpr int kSeekStepSeconds = 5;
-// Prev within this window jumps to previous track; after it, restarts current.
+// Prev selects the previous track at or below this playback time.
+// Prev restarts the current track above this playback time.
 constexpr uint32_t kPrevRestartMs = 3000;
-// Default in the quiet/mid band (headphones-friendly).
+// Use a low initial volume for headphones.
 constexpr int kDefaultVolumePercent = 30;
 constexpr uint32_t kToastMs = 1500;
 constexpr uint32_t kBrowserLocationSaveDelayMs = 750;
 
-// Single wide volume: soft% = (UI/100)^exp * 100, then PCM × boost.
-// Cubic keeps a large quiet zone for the hot 3.5mm jack; top still reaches
-// speaker-usable levels via boost.
+// Volume scale: soft% = (UI/100)^exp * 100, then PCM × boost.
+// The cubic curve permits small volume changes at low headphone levels.
+// The boost increases output at high speaker levels.
 // UI→soft% (before ×3 boost): 10→0.1%, 20→0.8%, 30→2.7%, 40→6.4%,
 // 50→12.5%, 60→21.6%, 70→34%, 80→51%, 90→73%, 100→100%.
-// Practical: ~10–45 headphones, ~55–80 speaker, ~85–100 loud speaker.
+// Suggested settings: 10–45 for headphones, 55–80 for the speaker, 85–100 for high speaker volume.
 constexpr int kVolCurveExpNum = 3;
 constexpr int kVolPcmBoost = 3;
 

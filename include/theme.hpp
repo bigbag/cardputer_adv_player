@@ -3,13 +3,14 @@
 #include <cstdint>
 #include <cstddef>
 
-// RGB565 palettes for the 240×135 TFT. Classic CRT phosphors + a few
-// high-contrast cyberdeck / DOS looks that stay readable when dimmed.
+// Define RGB565 palettes for the 240x135 TFT.
+// The sets include CRT phosphor colors and high-contrast display colors.
 //
-// Hex notes → RGB565 (rrrrrggggggbbbbb):
+// Approximate RGB888 source colors follow.
+// RGB565 uses bit order rrrrrggggggbbbbb.
 //   P1 green   ~ #4AFF00
 //   P3 amber   ~ #FFB000 / #FFB700
-//   Ice cyan   ~ #00E5FF on deep blue-black
+//   Cyan       ~ #00E5FF on dark blue
 //   VGA text   ~ #AAAAAA / #FFFFFF on #000000 (CGA light gray)
 //   Matrix     ~ #00FF41 / #008F11 on black
 //   Hot        ~ #FF2BD6 / #AA0088 on black
@@ -27,10 +28,10 @@ namespace themes {
 
 // 0 Phosphor — P1 green on black (default)
 // 1 Amber    — P3 amber CRT
-// 2 Cyan     — ice/cyan cyberdeck
+// 2 Cyan     — cyan on dark blue
 // 3 VGA      — DOS/CGA light gray
-// 4 Matrix   — bright green trail
-// 5 Hot      — magenta cyber
+// 4 Matrix   — bright green on black
+// 5 Hot      — magenta on black
 // 6 Blood    — crimson on near-black
 constexpr size_t kCount = 7;
 
@@ -42,7 +43,7 @@ inline const Theme& get(size_t index) {
       {"Amber", 0x0000, 0xFDA0, 0xA380, 0xFDA0, 0x0000},
       // Cyan: bg #001018, fg #00E5FF, dim #0088AA
       {"Cyan", 0x0083, 0x073F, 0x0455, 0x073F, 0x0083},
-      // VGA: bg #000000, fg #AAAAAA, dim #555555, sel white on gray
+      // VGA: bg #000000, fg #AAAAAA, dim #555555, selection white on gray
       // #AAAAAA → 0xAD55, #555555 → 0x52AA, #FFFFFF → 0xFFFF
       {"VGA", 0x0000, 0xAD55, 0x52AA, 0xAD55, 0x0000},
       // Matrix: bg #000000, fg #00FF41, dim #008F11

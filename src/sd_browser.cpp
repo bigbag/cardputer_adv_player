@@ -11,7 +11,8 @@
 #include <cerrno>
 #include <cstdio>
 
-// ESP32 Arduino SD mounts at this VFS path (SD.begin default).
+// The ESP32 Arduino SD library mounts the card at this VFS path.
+// This is the SD.begin default.
 static constexpr const char* kSdMount = "/sd";
 
 static int cmpInsensitive(const char* a, const char* b) {
@@ -33,15 +34,13 @@ static bool isAbsolutePath(const char* path) {
   return path && path[0] == '/';
 }
 
-// Build VFS absolute path: "/sd" + path_  (path_ always starts with '/').
+// Build the absolute VFS path from "/sd" and relPath. relPath must start with "/".
 static bool makeVfsPath(char* out, size_t cap, const char* relPath) {
   if (!out || cap < 4 || !relPath) return false;
   if (relPath[0] == '/' && relPath[1] == '\0') {
-    // root
     std::snprintf(out, cap, "%s", kSdMount);
     return true;
   }
-  // "/sd" + "/Music/foo"
   int n = std::snprintf(out, cap, "%s%s", kSdMount, relPath);
   return n > 0 && static_cast<size_t>(n) < cap;
 }
@@ -51,9 +50,9 @@ bool SdBrowser::begin() {
   digitalWrite(cfg::kSdCs, HIGH);
   SPI.begin(cfg::kSdSck, cfg::kSdMiso, cfg::kSdMosi, cfg::kSdCs);
 
-  // Try slow first (most reliable), then step up if the card accepts it.
+  // Start at cfg::kSdSpiHz. Try the next speed only if the mount fails.
   static const uint32_t kSpeeds[] = {
-      cfg::kSdSpiHz,  // 4 MHz default
+      cfg::kSdSpiHz,  // 4 MHz by default
       10000000u,
       15000000u,
   };
@@ -74,7 +73,7 @@ bool SdBrowser::begin() {
 
   if (sdOk_) {
     std::strcpy(path_, "/");
-    // Caller (App) lists once after begin — avoid double scan.
+    // App lists the folder after begin. Do not scan the same folder here.
   } else {
     Serial.println("[sd] No card or unsupported FS (need FAT16/FAT32, not exFAT)");
   }
@@ -98,9 +97,8 @@ bool SdBrowser::listCurrent() {
 
   const uint32_t t0 = millis();
 
-  // Fast path: POSIX readdir — no per-entry File open/stat heap (unlike openNextFile).
-  // FATFS already caches directory sectors; "batching" here means draining the
-  // dir stream in one pass without opening each child inode.
+  // Use POSIX readdir to avoid opening a File object for each entry.
+  // FATFS caches directory sectors. Read entries through one directory stream.
   char vfsPath[cfg::kMaxPathLen + 8];
   if (!makeVfsPath(vfsPath, sizeof(vfsPath), path_)) {
     Serial.println("[sd] path too long");
@@ -109,12 +107,12 @@ bool SdBrowser::listCurrent() {
 
   DIR* dir = ::opendir(vfsPath);
   if (!dir) {
-    // Fallback: Arduino SD API (slower — opens every entry).
+    // Use the Arduino SD API if VFS opendir fails.
     Serial.printf("[sd] opendir(%s) failed — Arduino fallback\n", vfsPath);
     return listCurrentArduino();
   }
 
-  // Scratch for rare DT_UNKNOWN stat.
+  // Reserve a path buffer for entries that need a stat call.
   char childPath[cfg::kMaxPathLen + 16];
 
   while (true) {
@@ -128,22 +126,22 @@ bool SdBrowser::listCurrent() {
     }
 
     const char* name = ent->d_name;
-    // Skip hidden + "." / ".."
+    // Skip dot entries: hidden files and the "." and ".." entries.
     if (!name || name[0] == '\0' || name[0] == '.') continue;
 
     bool isDir = false;
     bool known = true;
-    // ESP-IDF dirent may only define DT_DIR / DT_REG / DT_UNKNOWN.
+    // The ESP-IDF dirent may define only DT_DIR, DT_REG, and DT_UNKNOWN.
     if (ent->d_type == DT_DIR) {
       isDir = true;
     } else if (ent->d_type == DT_REG) {
       isDir = false;
     } else {
-      known = false;  // DT_UNKNOWN or other — stat once
+      known = false;  // Check the entry type with stat.
     }
 
     if (!known) {
-      // One stat only when d_type is unreliable (some FAT builds).
+      // Call stat only when d_type does not identify the entry.
       const int n = std::snprintf(childPath, sizeof(childPath), "%s/%s", vfsPath, name);
       if (n <= 0 || static_cast<size_t>(n) >= sizeof(childPath)) continue;
       struct stat st{};
@@ -180,20 +178,19 @@ bool SdBrowser::listCurrent() {
 }
 
 bool SdBrowser::listCurrentArduino() {
-  // Slow path kept as fallback if VFS opendir is unavailable.
   File dir = SD.open(path_);
   if (!dir || !dir.isDirectory()) {
     if (dir) dir.close();
     return false;
   }
 
-  // Prefer getNextFileName(isDir) — readdir without opening each child File.
+  // getNextFileName(isDir) reads names without opening a File per child.
   while (true) {
     bool isDir = false;
     String full = dir.getNextFileName(&isDir);
     if (full.length() == 0) break;
 
-    // full is absolute path under mount ("/sd/...") or relative; take basename.
+    // full is an absolute path under the mount or a relative path. Take the basename.
     const char* p = full.c_str();
     const char* slash = std::strrchr(p, '/');
     const char* name = slash ? slash + 1 : p;
@@ -336,7 +333,7 @@ bool SdBrowser::revealPath(const char* absPath) {
       return true;
     }
   }
-  return false;  // dir listed but file filtered out / gone
+  return false;  // No listed entry matches the file.
 }
 
 bool SdBrowser::prevAudioBefore(const char* fileName, char* outPath, size_t outCap) {
@@ -381,7 +378,7 @@ bool SdBrowser::restoreLocationInternal(const BrowserLocation& location,
     return false;
   };
 
-  // Empty path is the legacy/no-location default and validly restores root.
+  // An empty path is the legacy default with no saved location. It restores root.
   if (location.path[0] == '\0') {
     return openPathInternal("/", clearHistory);
   }
@@ -390,8 +387,8 @@ bool SdBrowser::restoreLocationInternal(const BrowserLocation& location,
     return restoreRoot();
   }
 
-  // An empty selection is valid only for an empty folder. For nonempty folders,
-  // it means the saved selected item is missing and must reset to root.
+  // An empty selection is valid only for an empty folder. In a nonempty
+  // folder, the saved item is missing and the browser resets to root.
   if (location.item[0] == '\0') {
     return count_ == 0 ? true : restoreRoot();
   }
@@ -410,7 +407,8 @@ bool SdBrowser::restoreLocation(const BrowserLocation& location) {
 
 bool SdBrowser::restoreLocationPreservingHistory(const BrowserLocation& location) {
   const bool restored = restoreLocationInternal(location, false);
-  // A failed temporary restore falls back to root, making saved frames stale.
+  // A failed temporary restore falls back to root and makes the saved
+  // history frames stale.
   if (!restored) history_.clear();
   return restored;
 }
@@ -429,7 +427,8 @@ BrowseSnapshot SdBrowser::snapshot() const {
 }
 
 void SdBrowser::sortEntries() {
-  // dirs first, then case-insensitive name. n≤256 — std::sort is fine.
+  // Sort directories first, then names case-insensitively. The list has at
+  // most 256 entries, so std::sort is fast enough.
   std::sort(entries_, entries_ + count_, [](const DirEntry& a, const DirEntry& b) {
     if (a.kind == EntryKind::Dir && b.kind != EntryKind::Dir) return true;
     if (a.kind != EntryKind::Dir && b.kind == EntryKind::Dir) return false;

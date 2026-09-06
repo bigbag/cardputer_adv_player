@@ -56,7 +56,7 @@ bool Mp3Decoder::open(const char* path) {
   size_t rd = p->file.read(p->inBuf, cfg::kCompressedBuf);
   p->inBufUsed = rd;
 
-  // Keep large PCM off the caller's stack (was blowing loopTask canary).
+  // Keep the PCM frame buffer off the caller's stack to prevent stack overflow.
   static mp3d_sample_t s_pcm[MINIMP3_MAX_SAMPLES_PER_FRAME];
   mp3dec_frame_info_t info{};
   int samples = mp3dec_decode_frame(&p->dec, p->inBuf, static_cast<int>(p->inBufUsed), s_pcm, &info);

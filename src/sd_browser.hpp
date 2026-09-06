@@ -21,13 +21,14 @@ class SdBrowser {
   size_t scroll() const;
   bool nextAudioAfter(const char* fileName, char* outPath, size_t outCap);
   bool prevAudioBefore(const char* fileName, char* outPath, size_t outCap);
-  // List parent of absPath and put cursor on the file. false if missing.
+  // List the parent folder of absPath. Move the cursor to the file.
+  // Return false if the file does not appear in the list.
   bool revealPath(const char* absPath);
-  // Current folder + selected visible entry (not cursor index / scroll).
+  // Return the current folder and selected entry, not the cursor index or scroll position.
   BrowserLocation location() const;
-  // Restore folder and selected entry. Missing folder/item resets to root.
+  // Restore the folder and selected entry. Use root if the folder or item does not exist.
   bool restoreLocation(const BrowserLocation& location);
-  // Restore a temporary lookup’s visible list without clearing session history.
+  // Restore the list after a temporary lookup. Preserve the session history.
   bool restoreLocationPreservingHistory(const BrowserLocation& location);
   BrowseSnapshot snapshot() const;
 
@@ -45,5 +46,5 @@ class SdBrowser {
   BrowserHistory history_;
   void sortEntries();
   void ensureScroll();
-  bool listCurrentArduino();  // slow fallback
+  bool listCurrentArduino();  // Use this method if VFS opendir fails.
 };

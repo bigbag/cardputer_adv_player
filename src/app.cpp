@@ -17,7 +17,7 @@ void App::begin() {
   if (!audio_.begin()) {
     Serial.println("[app] audio begin FAILED");
   }
-  // SD must be mounted before loading /.asvmp3/config.cfg
+  // Mount the SD card before loading /.asvmp3/config.cfg.
   browser_.begin();
   browser_.listCurrent();
   settings_.load();
@@ -32,12 +32,12 @@ void App::begin() {
   input_.begin();
 
   applySettings();
-  // Create config file only if missing (so first boot has something on disk).
+  // Create the config file if the card does not contain one.
   if (browser_.sdOk() && !SD.exists(Settings::kConfigPath)) {
     settings_.save();
   }
 
-  // Browser location is independent of the last played track.
+  // The browser location is independent of the last played track.
   restoreBrowserLocation();
   resumeLastTrack();
 
@@ -61,7 +61,7 @@ void App::openSettings() {
 }
 
 void App::closeSettings() {
-  // Values already auto-saved on each change.
+  // Settings changes request a save before this method runs.
   applySettings();
   screen_ = settingsReturn_;
 }
@@ -96,7 +96,7 @@ void App::flushBrowserLocation(bool showError) {
   if (settings_.save()) {
     browserLocationDirty_ = false;
   } else {
-    // Retry after another debounce interval rather than every loop iteration.
+    // Retry after another debounce interval, not on every loop iteration.
     browserLocationChangedAtMs_ = millis();
     if (showError) {
       ui_.showToast("Save fail (SD?)", millis());
@@ -140,7 +140,7 @@ void App::noteActivity(uint32_t nowMs) {
 void App::updateDisplayPower(uint32_t nowMs) {
   if (!ui_.displayOn()) return;
   const uint32_t timeout = settings_.displayTimeoutMs();
-  if (timeout == 0) return;  // never
+  if (timeout == 0) return;  // 0 disables the timeout
   if ((nowMs - lastActivityMs_) >= timeout) {
     Serial.println("[app] display off (timeout)");
     ui_.setDisplayOn(false);
@@ -169,8 +169,8 @@ void App::loop() {
   const uint32_t now = millis();
   M5Cardputer.update();
   player_.service();
-  // Auto-next (and any other path change) → persist last track, even while
-  // Browser is visible after the user leaves the Playing screen.
+  // Save the last track when its path changes.
+  // Keep this active while the display shows the Browser screen.
   const char* currentPath = player_.currentPath();
   if (currentPath && currentPath[0] == '/') rememberLastPath(currentPath);
 
@@ -206,7 +206,7 @@ void App::loop() {
 }
 
 void App::handle(Action a) {
-  // Global: Settings key from Browse/Playing
+  // The Settings key works on the Browse and Playing screens.
   if (a == Action::Settings && screen_ != Screen::Settings) {
     if (screen_ == Screen::Browse) {
       rememberBrowserLocation();
@@ -216,7 +216,7 @@ void App::handle(Action a) {
     return;
   }
 
-  // Global: P toggles Browse ↔ Playing when a track is loaded.
+  // P switches between Browse and Playing if the player has a track.
   if (a == Action::TogglePlayer && screen_ != Screen::Settings) {
     const char* path = player_.currentPath();
     const bool hasTrack = path && path[0] == '/';
@@ -287,8 +287,8 @@ void App::handleBrowse(Action a) {
       break;
   }
 
-  // A successful file selection switches to Playing and has already captured
-  // its Browser location in playSelection().
+  // A successful file selection switches to the Playing screen.
+  // playSelection() records the browser location before it starts playback.
   if (screen_ == Screen::Browse &&
       (a == Action::Up || a == Action::Down || a == Action::Enter ||
        a == Action::Space || a == Action::Back)) {
@@ -391,7 +391,7 @@ void App::handleSettings(Action a) {
           changed = true;
           break;
         case 3:
-          // step backward through timeout cycle
+          // Four forward steps equal one backward step in the cycle.
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
           settings_.cycleDisplayTimeout();
@@ -448,8 +448,8 @@ void App::playSelection() {
   rememberBrowserLocation();
   Serial.printf("[app] play %s\n", absPath);
   if (player_.open(absPath)) {
-    // rememberLastPath() coalesces this with the browser save if the track
-    // changed. Flush explicitly too for reselecting the already saved track.
+    // rememberLastPath() combines both saves when the track changes.
+    // Flush the browser location even if the user selects the same track again.
     rememberLastPath(absPath);
     flushBrowserLocation(true);
     screen_ = Screen::Playing;
