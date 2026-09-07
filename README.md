@@ -290,7 +290,7 @@ Auto-next is OFF or no next audio file exists.
   A seek to the displayed end finishes the track.
   CRC errors, missing frames, failed I/O, and exhausted read budgets stop playback.
   A failed seek stops playback. Reopen the file to clear a decoder error.
-- FLAC listening, SD timing, and memory margins still need on-device checks.
+- FLAC memory margins and SD timing still need measurements on the device.
 
 ### Audio baseline diagnostics
 
@@ -340,7 +340,7 @@ Compare volume at 20/30/50/70/100% on the speaker and headphones separately.
 Start headphone checks at a low level.
 Keep the Step 0 baseline firmware and fixture hashes for before/after comparisons.
 Host checks cover right-channel mixing and metadata-heavy WAV parsing.
-The user defers the full on-device matrix and listening comparisons.
+The full on-device matrix and controlled listening comparisons remain incomplete.
 
 ## On-device checklist
 
@@ -395,7 +395,9 @@ The user defers the full on-device matrix and listening comparisons.
     decode time, and seek time during repeated track changes.
 
 **Hardware validation status:** host tests and the firmware build pass.
-This environment does not have a completed on-device checklist.
+The user reports correct operation with the generated FLAC listening files on Cardputer.
+Heap and stack margins, SD timing, and decode and seek times remain unmeasured.
+The full on-device checklist remains incomplete.
 
 ## Project layout
 

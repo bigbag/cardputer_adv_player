@@ -141,7 +141,7 @@ product:
 - **`FlacDecoder`** uses the pinned **dr_flac** library.
   It checks native FLAC limits and produces stereo 16-bit PCM.
 - **`DecoderInput`** supplies shared file operations for MP3 and FLAC.
-  Firmware uses `SdInput`. Native checks can supply borrowed fixture input.
+  Firmware uses `SdInput` for SD file access.
 - **`AudioOut`** (`src/audio_out.cpp`) initializes the ES8311 over I2C.
   It transmits audio as an I2S master. It applies gain to PCM samples.
   It can play a test tone.
@@ -269,16 +269,8 @@ Opposite channels cancel in the mono output.
 The implementation does not add PCM boost or write codec gain on volume changes.
 The DAC register stays at `0xBF` during playback.
 
-The fourth-power curve moves the headphone range toward the middle of the UI scale.
-A 50% setting matches 25% on the previous quadratic curve.
-A 55% setting approximately matches the previous 30%.
-The maximum gain at 100% stays unchanged.
-Start headphone checks at a low setting.
+Use a low volume setting with headphones.
 Bounded PCM does not rule out analog distortion or unsafe headphone levels.
-The user defers hardware listening comparisons.
-
-Host checks cover all 65536 sample values at all 101 volume settings.
-The checks confirm bounded output, mute, unity, and identical-channel preservation.
 
 ---
 
@@ -287,8 +279,7 @@ The checks confirm bounded output, mute, unity, and identical-channel preservati
 ### MP3 (`Mp3Decoder` + minimp3)
 
 - The decoder uses a heap-backed 16 KiB input window without PSRAM.
-- Native tests and firmware use the same minimp3 decode loop.
-  A positive short read is not EOF.
+- A positive short read is not EOF.
   A read failure before file end produces an error.
 - The stream excludes a trailing ID3v1 tag.
   Complete final frames and short zero padding finish without an error.
@@ -314,7 +305,7 @@ The checks confirm bounded output, mute, unity, and identical-channel preservati
 
 - The decoder supports mono and stereo 16-bit PCM.
   It duplicates mono into stereo output.
-- File access and native tests share one bounded RIFF chunk parser.
+- The decoder uses a bounded RIFF chunk parser.
   Metadata size does not set parser memory use.
   Data can start beyond 512 bytes or appear before `fmt `.
 - The parser checks RIFF, chunk, padding, and whole-frame boundaries.
@@ -358,7 +349,6 @@ The checks confirm bounded output, mute, unity, and identical-channel preservati
 
 The browser lists `.mp3`, `.wav`, and `.flac` audio files.
 Unsupported extensions do not open.
-Hardware listening and seek-accuracy checks remain unverified.
 
 ---
 
@@ -427,16 +417,14 @@ The decode step does not run on the UI task:
 
 ---
 
-## 11. Baseline diagnostics
+## 11. Diagnostics
 
 `AUDIO_DIAG` defaults to zero in `include/config.hpp`.
 The `cardputer-adv-diag` environment sets it to one.
 Both firmware environments use M5Cardputer 1.1.1, M5Unified 0.2.18,
-and M5GFX 0.2.25. M5GFX uses its release commit because version 0.2.25
-is not available from the PlatformIO registry used for this build.
+and M5GFX 0.2.25. M5GFX uses a pinned release commit.
 
 The audio task logs format and source channels when it opens a decoder.
-`AudioFormat::channels` keeps its existing meaning.
 `sourceChannels` reports the input channel count.
 The task records the maximum decode duration with unsigned `micros()` subtraction.
 Open and exit logs include free and minimum internal heap, the largest free
@@ -456,6 +444,3 @@ Diagnostic timers, memory queries, and diagnostic log messages compile out when
 `AUDIO_DIAG=0`. Diagnostics do not change the volume curve, stereo slots,
 DMA sizes, decoder buffers, or task ownership.
 Normal builds keep output error messages.
-The host fixture generator and check command are in `README.md`.
-The initial 44.1 kHz baseline log remains available.
-The user defers further hardware validation.
