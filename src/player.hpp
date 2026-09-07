@@ -6,7 +6,6 @@
 #include "decoders/decoder.hpp"
 #include "decoders/wav_decoder.hpp"
 #include "decoders/mp3_decoder.hpp"
-#include "decoders/flac_decoder.hpp"
 
 #include <atomic>
 #include <cstddef>
@@ -57,7 +56,6 @@ class Player {
   IDecoder* decoder_ = nullptr;
   WavDecoder wavDec_;
   Mp3Decoder mp3Dec_;
-  FlacDecoder flacDec_;
 
   std::atomic<bool> audioTaskRunning_{false};  // resource-ownership barrier
   int16_t pcmBuf_[512 * 2]{};

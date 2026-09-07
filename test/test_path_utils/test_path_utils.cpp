@@ -31,13 +31,6 @@ void test_ext_case() {
   TEST_ASSERT_FALSE(path::hasExtInsensitive("x.txt", ".mp3"));
 }
 
-void test_flac_is_a_playable_file() {
-  TEST_ASSERT_NOT_EQUAL(static_cast<int>(EntryKind::Dir),
-                        static_cast<int>(path::kindFromName("track.FLAC")));
-  TEST_ASSERT_EQUAL(static_cast<int>(EntryKind::Dir),
-                    static_cast<int>(path::kindFromName("track.flac.bak")));
-}
-
 void test_utf8_track_path() {
   const char* name = u8"Очень длинное русское название песни — 日本語.MP3";
   char full[cfg::kMaxPathLen];
@@ -61,7 +54,6 @@ int main() {
   RUN_TEST(test_parent_nested);
   RUN_TEST(test_parent_root);
   RUN_TEST(test_ext_case);
-  RUN_TEST(test_flac_is_a_playable_file);
   RUN_TEST(test_utf8_track_path);
   return UNITY_END();
 }

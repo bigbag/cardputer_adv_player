@@ -1,6 +1,6 @@
 # Audio and device architecture
 
-This document describes the audio path of the Cardputer-ADV MP3/WAV/FLAC player.
+This document describes the audio path of the Cardputer-ADV MP3/WAV player.
 The path goes from the SD card to the speaker or to the 3.5 mm jack.
 
 This document describes the current firmware.
@@ -97,8 +97,8 @@ product:
                              │
           ┌──────────────────┼──────────────────┐
           ▼                  ▼                  ▼
-   Mp3Decoder         WavDecoder/          SdBrowser
-   (minimp3)          FlacDecoder         next/prev path
+   Mp3Decoder         WavDecoder          SdBrowser
+   (minimp3)                             next/prev path
           │                  │
           └────────┬─────────┘
                    │ int16 stereo frames
@@ -138,9 +138,7 @@ product:
   It reads data from the SD card and produces PCM samples.
 - **`WavDecoder`** supports 16-bit PCM WAV only.
   It copies each mono sample to both stereo channels.
-- **`FlacDecoder`** uses the pinned **dr_flac** library.
-  It checks native FLAC limits and produces stereo 16-bit PCM.
-- **`DecoderInput`** supplies shared file operations for MP3 and FLAC.
+- **`DecoderInput`** supplies file operations for MP3.
   Firmware uses `SdInput` for SD file access.
 - **`AudioOut`** (`src/audio_out.cpp`) initializes the ES8311 over I2C.
   It transmits audio as an I2S master. It applies gain to PCM samples.
@@ -315,39 +313,7 @@ Bounded PCM does not rule out analog distortion or unsafe headphone levels.
   Failed seeks do not change position.
   Short PCM reads report complete frames and then an error.
 
-### FLAC (`FlacDecoder` + dr_flac)
-
-- The decoder supports native FLAC with one or two channels.
-  Input uses 16 or 24 bits per sample at 8000 through 48000 Hz.
-  Output uses stereo int16. Mono samples fill both channels.
-  Conversion from 24 bits discards the low eight bits.
-- STREAMINFO must declare a maximum block size from 16 through 4608 frames.
-  The sample count must be known and nonzero.
-  Duration must fit 32-bit milliseconds.
-  The decoder checks these fields before it opens the library.
-- The library uses a bounded allocator with a 64 KiB payload limit.
-  Its decoded sample buffer and seek table share that limit.
-  The small adapter state, allocation headers, SD state, and task stack are separate.
-  The decoder does not allocate a second full-block PCM buffer.
-- Open and each decode call have a 64 KiB read limit.
-  Seek has a 256 KiB read limit.
-  Resource-limit failures stop playback, even for otherwise valid files.
-  Positive short reads continue. A zero read before file end is an error.
-- Each decoded frame must match the stream format and sample timeline.
-  CRC checks stay enabled. A skipped frame produces an error instead of shifted audio.
-  Fixed-block frame numbers use the STREAMINFO maximum block size.
-  Files that do not fit this mapping produce an error.
-- Position counts delivered frames, not library read-ahead.
-  Seek uses the declared sample timeline and discards old output through Player.
-  Seek to the displayed end finishes without decoding the skipped audio.
-  A failed seek preserves the last delivered position and stops the decoder.
-  Large sample jumps reset the library first to avoid its 32-bit seek shortcut.
-  Only close/open clears a decoder error.
-- Unused metadata is skipped. The adapter does not decode album art.
-  The pinned revision and checksum are in `lib/dr_flac/provenance.txt`.
-  Ogg FLAC is disabled.
-
-The browser lists `.mp3`, `.wav`, and `.flac` audio files.
+The browser lists `.mp3` and `.wav` audio files.
 Unsupported extensions do not open.
 
 ---
@@ -370,7 +336,7 @@ The decode step does not run on the UI task:
 
 ## 8. Track navigation
 
-- **Auto-next** — if enabled, the player starts the next `.mp3`, `.wav`, or `.flac`
+- **Auto-next** — if enabled, the player starts the next `.mp3` or `.wav`
   in the playing track's folder after the decoder reports `Finished`.
   The browser sorts the listing. It places directories first.
   Next and previous track searches skip directories.
@@ -395,7 +361,7 @@ The decode step does not run on the UI task:
 - `src/audio_out.cpp` — ES8311 + I2S + PCM gain
 - `src/audio_dsp.cpp` — stereo mean and bounded Q15 gain
 - `src/player.cpp` — task lifecycle, decode loop, next/prev
-- `src/decoders/*` — MP3/WAV/FLAC and shared input operations
+- `src/decoders/*` — MP3/WAV and file input operations
 - `src/sd_browser.cpp` — SD mount + listing + siblings
 - `src/settings.cpp` — persistent settings, last path, and browser location
 - `src/app.cpp` — connects UI controls to player/settings
@@ -404,7 +370,7 @@ The decode step does not run on the UI task:
 
 ## 10. Design choices (summary)
 
-1. **Direct decoder integration.** The player uses minimp3, dr_flac, and a WAV decoder
+1. **Direct decoder integration.** The player uses minimp3 and a WAV decoder
    instead of ESP32-audioI2S. This gives direct control of PCM and volume.
 2. **Software volume.** The DAC volume stays fixed during playback.
    One software curve controls both outputs. The player does not have separate output profiles.

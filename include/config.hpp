@@ -72,10 +72,6 @@ constexpr unsigned kAudioTaskPrio = 5;
 #endif
 constexpr size_t kPcmRingFrames = 4096;
 constexpr size_t kCompressedBuf = 16 * 1024;
-constexpr size_t kFlacHeapBudget = 64 * 1024;
-constexpr uint16_t kFlacMaxBlockFrames = 4608;
-constexpr size_t kFlacDecodeReadBudget = 64 * 1024;
-constexpr size_t kFlacSeekReadBudget = 256 * 1024;
 constexpr bool kBootBeep = false;
 
 }  // namespace cfg

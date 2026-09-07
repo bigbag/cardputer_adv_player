@@ -69,7 +69,6 @@ bool hasExtInsensitive(const char* name, const char* extWithDot) {
 EntryKind kindFromName(const char* name) {
   if (hasExtInsensitive(name, ".mp3")) return EntryKind::Mp3;
   if (hasExtInsensitive(name, ".wav")) return EntryKind::Wav;
-  if (hasExtInsensitive(name, ".flac")) return EntryKind::Flac;
   return EntryKind::Dir;
 }
 

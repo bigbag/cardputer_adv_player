@@ -1,4 +1,4 @@
-# Build the M5Stack Cardputer-ADV MP3/WAV/FLAC player with PlatformIO.
+# Build the M5Stack Cardputer-ADV MP3/WAV player with PlatformIO.
 # Select another launcher if the system uses Python 3.14 or later.
 # Example: make build PIO="python3.12 -m platformio"
 
@@ -57,7 +57,7 @@ size: ## Show firmware size.
 	$(PIO) run -e $(ENV_DEVICE) --target size
 
 help: ## Show command help.
-	@echo "cardputer_asv_mp3 — Cardputer-ADV MP3/WAV/FLAC player"
+	@echo "cardputer_asv_mp3 — Cardputer-ADV MP3/WAV player"
 	@echo "  PIO launcher: $(PIO)"
 	@echo "  Device env:   $(ENV_DEVICE)"
 	@echo ""

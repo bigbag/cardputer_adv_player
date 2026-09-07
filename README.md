@@ -1,9 +1,9 @@
 # Cardputer Player
 
-Minimal MP3/WAV/FLAC player for **M5Stack Cardputer-ADV** (ESP32-S3 / Stamp-S3A).
+Minimal MP3/WAV player for **M5Stack Cardputer-ADV** (ESP32-S3 / Stamp-S3A).
 
-The player reads files from a FAT32 SD card. It plays MP3, 16-bit PCM WAV,
-and supported FLAC files through the ES8311 codec.
+The player reads files from a FAT32 SD card. It plays MP3 and 16-bit PCM WAV
+files through the ES8311 codec.
 Audio goes to the speaker or to the 3.5 mm jack.
 The 240×135 display shows a terminal-style user interface.
 
@@ -14,7 +14,7 @@ The 240×135 display shows a terminal-style user interface.
 - Python **3.10–3.13** for PlatformIO. PlatformIO does not support Python 3.14
   or later. The Makefile automatically uses `python3.12 -m platformio` when
   necessary.
-- FAT32 microSD card with `.mp3`, `.wav`, or supported `.flac` files
+- FAT32 microSD card with `.mp3` or `.wav` files
 
 ## Quick start
 
@@ -82,7 +82,6 @@ If the device shows **No SD card**, do this:
     track01.mp3
   album2/
     intro.wav
-    song.flac
 ```
 
 The browser starts at the SD card root. It supports nested folders.
@@ -252,7 +251,7 @@ Auto-next is OFF or no next audio file exists.
 
 ## Audio notes
 
-- Formats: MP3 (minimp3), WAV PCM 16-bit mono/stereo, bounded native FLAC (dr_flac)
+- Formats: MP3 (minimp3), WAV PCM 16-bit mono/stereo
 - Output: ES8311 + I2S
 - The jack mute is **hardware** (the MCU has no detect pin). One software
   volume curve serves both output paths.
@@ -271,26 +270,8 @@ Auto-next is OFF or no next audio file exists.
 - WAV parsing follows RIFF chunks instead of a fixed-size header.
   Metadata-heavy 16-bit PCM files use the same parser as native tests.
 
-### FLAC limits
-
-- Native `.flac` files only. Ogg FLAC, AAC/M4A, Vorbis, and Opus are not supported.
-- Mono or stereo, 16-bit or 24-bit, from 8000 through 48000 Hz.
-  The output stays stereo 16-bit PCM. The decoder discards the low eight bits of 24-bit samples.
-- The maximum FLAC block size is 4608 frames.
-  STREAMINFO must declare a nonzero sample count and a duration that fits 32-bit milliseconds.
-- The library can request at most 64 KiB of heap.
-  Its sample buffer and seek table share this limit.
-  The input adapter, allocation headers, and task stack are separate.
-  Album art and other unused metadata do not get a heap buffer.
-- Open and each decode call can read at most 64 KiB.
-  Each seek can read at most 256 KiB.
-  A valid file can exceed these limits and produce an error.
-  These byte limits do not bound an SD driver stall.
-- Position counts delivered frames. Seek uses the sample timeline.
-  A seek to the displayed end finishes the track.
-  CRC errors, missing frames, failed I/O, and exhausted read budgets stop playback.
-  A failed seek stops playback. Reopen the file to clear a decoder error.
-- FLAC memory margins and SD timing still need measurements on the device.
+FLAC is not supported. Full device testing found FLAC playback unusable.
+The project no longer includes the FLAC decoder. The browser skips `.flac` files.
 
 ### Audio baseline diagnostics
 
@@ -384,18 +365,12 @@ The full on-device matrix and controlled listening comparisons remain incomplete
     Check the percentage on pause, during playback, and during charging.
     Check that voltage and percentage update together.
     Treat the percentage as an estimate, not a runtime measurement.
-23. Play supported FLAC files in mono and stereo at 44.1 and 48 kHz.
-    Check both 16-bit input and 24-bit input converted to 16-bit output.
-    Check forward seek, backward seek, seek while paused, and seek from the end.
-24. Put MP3, WAV, and FLAC files in one folder.
-    Check next, previous, Auto-next, and restored FLAC playback after restart.
-25. Open truncated FLAC files and files above the FLAC limits.
-    Check that errors prevent Auto-next.
-    With the diagnostic build, record heap, largest free block, stack margin,
-    decode time, and seek time during repeated track changes.
+23. Put MP3, WAV, and FLAC files in one folder.
+    Check that the browser lists only MP3 and WAV files.
+    Check that next, previous, and Auto-next skip FLAC files.
 
 **Hardware validation status:** host tests and the firmware build pass.
-The user reports correct operation with the generated FLAC listening files on Cardputer.
+The user reports that FLAC playback is unusable after full device testing.
 Heap and stack margins, SD timing, and decode and seek times remain unmeasured.
 The full on-device checklist remains incomplete.
 
@@ -405,7 +380,6 @@ The full on-device checklist remains incomplete.
 include/          config, actions, types, path_utils
 src/              app, ui, input, player, sd_browser, audio_out, decoders/
 lib/minimp3/      third-party minimp3.h
-lib/dr_flac/      pinned third-party FLAC decoder and provenance
 test/             native Unity tests
 docs/             audio architecture
 Makefile          build, upload, and test commands
@@ -418,7 +392,7 @@ platformio.ini    firmware and native environments
 - **`SdBrowser`** — SD card mount and directory listing (`readdir`)
 - **`Player`** — FreeRTOS audio task, auto-next, next/previous
 - **`AudioOut`** — ES8311 + I2S + volume curve
-- **`Mp3Decoder` / `WavDecoder` / `FlacDecoder`** — decode to stereo PCM
+- **`Mp3Decoder` / `WavDecoder`** — decode to stereo PCM
 - **`Settings`** — SD card config file load/save
 - **`Ui` / `Input`** — terminal-style UI + keys
 

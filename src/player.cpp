@@ -28,9 +28,6 @@ bool Player::openDecoder(const char* path) {
   } else if (path::hasExtInsensitive(path, ".mp3")) {
     if (!mp3Dec_.open(path)) return false;
     decoder_ = &mp3Dec_;
-  } else if (path::hasExtInsensitive(path, ".flac")) {
-    if (!flacDec_.open(path)) return false;
-    decoder_ = &flacDec_;
   } else {
     return false;
   }
@@ -62,7 +59,6 @@ void Player::resetTrackPublication() {
 
 static const char* audioDiagCodec(const char* path) {
   if (path::hasExtInsensitive(path, ".mp3")) return "MP3";
-  if (path::hasExtInsensitive(path, ".flac")) return "FLAC";
   return "WAV";
 }
 
