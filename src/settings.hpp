@@ -10,7 +10,8 @@
 class Settings {
  public:
   void load();   // Use defaults if the file or SD card is not available.
-  bool save();   // Write /.asvmp3/config.cfg. Return false if the write fails.
+  bool save();   // Write /.asvmp3/config.cfg through a checked temporary file.
+                 // Keep the previous config as a recovery backup. False on failure.
 
   SettingsSnapshot snapshot() const;
 
@@ -45,6 +46,10 @@ class Settings {
   // Return an empty string if no path exists.
   const char* lastPath() const { return lastPath_; }
   void setLastPath(const char* absPath);  // Do nothing if the path does not change.
+  // The saved playback position for lastPath_ in milliseconds.
+  // setLastPath resets the position when the path changes.
+  uint32_t lastPositionMs() const { return lastPositionMs_; }
+  void setLastPositionMs(uint32_t positionMs);
 
   const BrowserLocation& browserLocation() const { return browserLocation_; }
   void setBrowserLocation(const BrowserLocation& location);
@@ -58,6 +63,9 @@ class Settings {
 
   static constexpr const char* kConfigDir = "/.asvmp3";
   static constexpr const char* kConfigPath = "/.asvmp3/config.cfg";
+  static constexpr const char* kConfigTmpPath = "/.asvmp3/config.cfg.tmp";
+  static constexpr const char* kConfigBackupPath = "/.asvmp3/config.cfg.bak";
+  static constexpr const char* kConfigLegacyPath = "/asvmp3.cfg";
 
  private:
   void clamp();
@@ -73,5 +81,6 @@ class Settings {
   size_t themeIndex_ = 0;
   size_t cursor_ = 0;
   char lastPath_[cfg::kMaxPathLen]{};
+  uint32_t lastPositionMs_ = 0;
   BrowserLocation browserLocation_{};
 };

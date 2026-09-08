@@ -8,6 +8,7 @@
 #include "settings.hpp"
 #include "types.hpp"
 #include "idle_timeout.hpp"
+#include "bookmark_checkpoint.hpp"
 #include <cstdint>
 
 class App {
@@ -24,7 +25,8 @@ class App {
   void closeSettings();
   void applySettings();
   void persistSettings();  // Apply settings. Write the config file immediately.
-  void rememberLastPath(const char* absPath);  // Set last_path and request a save.
+  bool updateBookmark(uint32_t nowMs);
+  bool saveSettings(bool showError);
   void rememberBrowserLocation();
   void flushBrowserLocation(bool showError);
   void restoreBrowserLocation();
@@ -45,6 +47,7 @@ class App {
   Screen systemReturn_ = Screen::Browse;
   uint32_t lastActivityMs_ = 0;
   IdleTimeout idleTimeout_;
+  BookmarkCheckpoint bookmarkCheckpoint_;
   bool browserLocationDirty_ = false;
   uint32_t browserLocationChangedAtMs_ = 0;
 };

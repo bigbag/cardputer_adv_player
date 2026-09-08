@@ -116,7 +116,7 @@ product:
 ### 2.1 Modules
 
 - **`App`** (`src/app.cpp`) controls the Browse, Playing, Settings, and System screens.
-  It applies settings. It saves `last_path` and the browser location.
+  It saves the active-file bookmark and the browser location.
   It calls the `Player` controls.
 - **`Input`** (`src/input.cpp`) holds the keyboard lock state in memory.
   Fn+L toggles the lock on every screen.
@@ -152,18 +152,23 @@ product:
 - **`SdBrowser`** lists the FAT directory with `readdir`.
   It opens folders. It finds the next or previous audio file in the current folder.
 - **`Settings`** — stores `/.asvmp3/config.cfg` on the SD card. Keys
-  include volume, theme, `last_path`, `browser_path`, `browser_item`, and
-  `on_boot`.
+  include volume, theme, `last_path`, `last_position_ms`, `browser_path`,
+  `browser_item`, and `on_boot`.
 
 ---
 
 ## 3. Playback data path (runtime)
 
-1. `App::playSelection()` calls `Player::open(absPath)`.
+1. `App::playSelection()` calls `Player::open(absPath, startPositionMs)`.
+   It uses the current bookmark only when the selected path matches it.
 2. `Player::open()` waits for the previous task to release its resources.
    It stores the UI-owned path and name and clears the published track values.
+   It publishes the requested start position before task creation.
    It starts one core-0 task with a 24576-byte stack.
 3. The audio task opens the decoder and publishes its format.
+   It applies a nonzero start position before the first output write.
+   A position past a known exact duration starts at zero.
+   A failed initial seek reports an error without outputting the opening audio.
    It sets the I2S rate and applies the latest requested volume.
 4. Each loop applies control requests, decodes stereo PCM, and writes the output.
    A complete output write permits position publication.
@@ -355,9 +360,33 @@ The decode step does not run on the UI task:
 - **Browser location** — the device restores `browser_path` and
   `browser_item` first. This location is independent of playback.
   The Browser opens root `/` if the folder or selected item does not exist.
-- **Last path / boot** — `on_boot=play` opens `last_path` and keeps the
-  Browser state. `browse` and `off` show the restored Browser and do not
-  autoplay.
+- **Bookmark / boot** — `on_boot=play` opens `last_path` at `last_position_ms`.
+  It keeps the Browser state. `browse` and `off` do not start playback.
+  Selecting the bookmarked file in Browse also resumes it.
+  Next, Previous, and Auto-next open tracks at zero.
+
+### Bookmark persistence
+
+`App::updateBookmark()` reads the published position and updates the saved path/time pair.
+A completed track uses zero. A different track replaces the pair.
+`BookmarkCheckpoint` requests a save every 10000 ms when the position changes.
+Track changes, backward seeks, pause, paused seeks, and completion request an immediate save.
+It retains pending changes after a failed save. Its retry timer uses unsigned subtraction.
+All App settings writes capture the bookmark through `saveSettings()`.
+Browser location stays independent. Idle shutdown proceeds only after a successful save.
+
+Settings writes a temporary config and checks its exact write count and size.
+It moves the main config to `config.cfg.bak` before it promotes the temporary file.
+A failed promotion preserves the previous config in the main file or the backup.
+Startup prefers the main file, then the backup, then the legacy root config.
+Startup never loads the temporary file. A failed legacy migration retains the source file.
+This sequence permits recovery from an interrupted replacement.
+It does not guarantee recovery from physical SD or FAT corruption.
+
+Native tests run the Settings parser and writer with an in-memory SD adapter.
+They inject write and rename failures and load the resulting files after a simulated restart.
+They also check checkpoint transitions, failed-save retries, and timer wrap.
+They do not execute FreeRTOS or measure real SD write latency.
 
 ---
 
@@ -369,8 +398,9 @@ The decode step does not run on the UI task:
 - `src/player.cpp` — task lifecycle, decode loop, next/prev
 - `src/decoders/*` — MP3/WAV and file input operations
 - `src/sd_browser.cpp` — SD mount + listing + siblings
-- `src/settings.cpp` — persistent settings, last path, and browser location
+- `src/settings.cpp` — persistent settings, playback bookmark, and browser location
 - `src/app.cpp` — connects UI controls to player/settings
+- `include/bookmark_checkpoint.hpp` — bookmark save transitions and retry timer
 
 ---
 

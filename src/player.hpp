@@ -19,7 +19,7 @@ class Player {
  public:
   bool begin(AudioOut* out, SdBrowser* browser);
   void end();
-  bool open(const char* absPath);
+  bool open(const char* absPath, uint32_t startPositionMs = 0);  // startPositionMs resumes before the first output
   void stop();
   void togglePause();
   void setVolumePercent(int p);
@@ -64,6 +64,7 @@ class Player {
   std::atomic<bool> stopReq_{false};
   std::atomic<bool> paused_{false};
   std::atomic<int32_t> seekDeltaMs_{0};
+  std::atomic<uint32_t> startSeekMs_{0};  // UI writes it in open(); the audio task consumes it once
   std::atomic<bool> autoNextEnabled_{true};
   std::atomic<int> desiredVolume_{cfg::kDefaultVolumePercent};
 

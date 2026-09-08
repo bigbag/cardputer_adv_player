@@ -11,12 +11,10 @@
 
 // Save settings through a temporary file.
 // Create the directory if necessary.
-// Write the temporary file. Flush the file.
-// Check the write count and file size.
-// Remove the old file. Rename the temporary file.
-// A power loss during replacement can remove the previous settings.
-
-static constexpr const char* kConfigTmp = "/.asvmp3/config.cfg.tmp";
+// Write the temporary file and check the exact byte count and final size.
+// Rename the current config to the backup before promoting the temporary file.
+// A failed promotion restores the backup, so a complete config always survives.
+// Load the canonical config, else the backup, else the legacy root file.
 static constexpr uint32_t kIdleTimeouts[] = {0, 300000, 1800000, 3600000};
 
 void Settings::applyDefaults() {
@@ -29,6 +27,7 @@ void Settings::applyDefaults() {
   themeIndex_ = 0;
   cursor_ = 0;
   lastPath_[0] = '\0';
+  lastPositionMs_ = 0;
   browserLocation_ = {};
 }
 
@@ -37,7 +36,10 @@ void Settings::setLastPath(const char* absPath) {
   if (std::strcmp(lastPath_, absPath) == 0) return;
   std::strncpy(lastPath_, absPath, cfg::kMaxPathLen - 1);
   lastPath_[cfg::kMaxPathLen - 1] = '\0';
+  lastPositionMs_ = 0;  // A new file never keeps the previous position.
 }
+
+void Settings::setLastPositionMs(uint32_t positionMs) { lastPositionMs_ = positionMs; }
 
 void Settings::setBrowserLocation(const BrowserLocation& location) {
   if (location.path[0] == '/') {
@@ -151,6 +153,15 @@ bool Settings::parseLine(const char* line) {
     } else {
       lastPath_[0] = '\0';
     }
+  } else if (std::strcmp(key, "last_position_ms") == 0) {
+    // Accept digits only. A sign, trailing text, or overflow keeps the old value.
+    char* end = nullptr;
+    errno = 0;
+    const unsigned long value = std::strtoul(val, &end, 10);
+    const bool valid = errno == 0 && end != val && *end == '\0' &&
+                       std::isdigit(static_cast<unsigned char>(val[0])) &&
+                       value <= 0xFFFFFFFFul;
+    if (valid) lastPositionMs_ = static_cast<uint32_t>(value);
   } else if (std::strcmp(key, "browser_path") == 0) {
     if (val[0] == '/') {
       std::strncpy(browserLocation_.path, val, sizeof(browserLocation_.path) - 1);
@@ -170,11 +181,19 @@ bool Settings::parseLine(const char* line) {
 void Settings::load() {
   applyDefaults();
 
-  // Prefer the hidden path. Migrate the legacy root file when it exists.
+  // Load the canonical config. Without it, prefer the recovery backup over
+  // the legacy root file. A temporary file is never a config.
   const char* path = kConfigPath;
-  if (!SD.exists(path) && SD.exists("/asvmp3.cfg")) {
-    path = "/asvmp3.cfg";
-    Serial.println("[cfg] migrating /asvmp3.cfg → /.asvmp3/config.cfg");
+  bool migrating = false;
+  if (!SD.exists(kConfigPath)) {
+    if (SD.exists(kConfigBackupPath)) {
+      path = kConfigBackupPath;
+      Serial.println("[cfg] config missing — loading recovery backup");
+    } else if (SD.exists(kConfigLegacyPath)) {
+      path = kConfigLegacyPath;
+      migrating = true;
+      Serial.println("[cfg] migrating /asvmp3.cfg → /.asvmp3/config.cfg");
+    }
   }
 
   if (!SD.exists(path)) {
@@ -224,10 +243,14 @@ void Settings::load() {
                 static_cast<unsigned long>(displayTimeoutMs_),
                 themes::name(themeIndex_), autoNext_ ? 1 : 0, bootStr);
 
-  // Save to the config directory if the source file uses the legacy path.
-  if (path != kConfigPath) {
-    save();
-    SD.remove("/asvmp3.cfg");
+  // Remove the legacy file only after the new config is complete on the card.
+  // A failed save keeps it for the next boot.
+  if (migrating) {
+    if (save()) {
+      SD.remove(kConfigLegacyPath);
+    } else {
+      Serial.println("[cfg] migration save failed — keeping /asvmp3.cfg");
+    }
   }
 }
 
@@ -244,21 +267,23 @@ bool Settings::save() {
   }
 
   // Write the temporary file before replacing the config file.
-  if (SD.exists(kConfigTmp)) {
-    SD.remove(kConfigTmp);
+  if (SD.exists(kConfigTmpPath)) {
+    SD.remove(kConfigTmpPath);
   }
 
-  File f = SD.open(kConfigTmp, FILE_WRITE);
+  File f = SD.open(kConfigTmpPath, FILE_WRITE);
   if (!f) {
-    Serial.printf("[cfg] SAVE FAIL open %s\n", kConfigTmp);
+    Serial.printf("[cfg] SAVE FAIL open %s\n", kConfigTmpPath);
     return false;
   }
 
-  // Count the bytes to detect an incomplete write.
+  // Track the exact byte count to detect an incomplete write.
   size_t written = 0;
+  size_t expected = 0;
   auto wr = [&](const char* s) {
-    size_t n = std::strlen(s);
-    size_t w = f.write(reinterpret_cast<const uint8_t*>(s), n);
+    const size_t n = std::strlen(s);
+    expected += n;
+    const size_t w = f.write(reinterpret_cast<const uint8_t*>(s), n);
     written += w;
     return w == n;
   };
@@ -287,57 +312,43 @@ bool Settings::save() {
   ok = ok && wr(line);
   std::snprintf(line, sizeof(line), "last_path=%s\n", lastPath_);
   ok = ok && wr(line);
+  std::snprintf(line, sizeof(line), "last_position_ms=%lu\n",
+                static_cast<unsigned long>(lastPositionMs_));
+  ok = ok && wr(line);
   std::snprintf(line, sizeof(line), "browser_path=%s\n", browserLocation_.path);
   ok = ok && wr(line);
   std::snprintf(line, sizeof(line), "browser_item=%s\n", browserLocation_.item);
   ok = ok && wr(line);
 
   f.flush();
-#if defined(ESP32)
-#endif
   const size_t sz = f.size();
   f.close();
 
-  // Minimum expected size for the header and settings keys.
-  constexpr size_t kMinBytes = 40;
-  if (!ok || written < kMinBytes || sz < kMinBytes) {
+  // Exact counts and final size prove the temporary file is complete.
+  if (!ok || written != expected || sz != expected) {
     Serial.printf("[cfg] SAVE FAIL short write %u/%u — discard tmp\n",
-                  static_cast<unsigned>(sz), static_cast<unsigned>(kMinBytes));
-    SD.remove(kConfigTmp);
+                  static_cast<unsigned>(sz), static_cast<unsigned>(expected));
+    SD.remove(kConfigTmpPath);
     return false;
   }
 
-  // Remove the existing file before rename for SD implementations that do not replace files.
-  if (SD.exists(kConfigPath)) {
-    if (!SD.remove(kConfigPath)) {
-      Serial.printf("[cfg] SAVE FAIL remove old %s\n", kConfigPath);
-      SD.remove(kConfigTmp);
+  // Keep the current config as the recovery backup while promoting the new one.
+  const bool hadMain = SD.exists(kConfigPath);
+  if (hadMain) {
+    if (SD.exists(kConfigBackupPath)) SD.remove(kConfigBackupPath);
+    if (!SD.rename(kConfigPath, kConfigBackupPath)) {
+      Serial.printf("[cfg] SAVE FAIL backup rename %s\n", kConfigPath);
+      SD.remove(kConfigTmpPath);
       return false;
     }
   }
-  if (!SD.rename(kConfigTmp, kConfigPath)) {
-    // Copy the file if rename fails.
-    Serial.println("[cfg] rename failed — copy fallback");
-    File src = SD.open(kConfigTmp, FILE_READ);
-    File dst = SD.open(kConfigPath, FILE_WRITE);
-    if (!src || !dst) {
-      if (src) src.close();
-      if (dst) dst.close();
-      SD.remove(kConfigTmp);
-      Serial.println("[cfg] SAVE FAIL copy fallback");
-      return false;
-    }
-    uint8_t buf[64];
-    while (src.available()) {
-      int n = src.read(buf, sizeof(buf));
-      if (n <= 0) break;
-      dst.write(buf, n);
-    }
-    dst.flush();
-    dst.close();
-    src.close();
-    SD.remove(kConfigTmp);
+  if (!SD.rename(kConfigTmpPath, kConfigPath)) {
+    Serial.println("[cfg] SAVE FAIL promotion — restoring backup");
+    SD.remove(kConfigTmpPath);
+    if (hadMain) SD.rename(kConfigBackupPath, kConfigPath);
+    return false;
   }
+  if (hadMain) SD.remove(kConfigBackupPath);
 
   Serial.printf("[cfg] saved %s vol=%d bright=%u timeout=%lu theme=%s autonext=%s on_boot=%s (%u bytes)\n",
                 kConfigPath, volume_, static_cast<unsigned>(brightness_),

@@ -106,7 +106,7 @@ void Player::waitTaskGone() {
   }
 }
 
-bool Player::open(const char* absPath) {
+bool Player::open(const char* absPath, uint32_t startPositionMs) {
   if (!out_ || !absPath || absPath[0] == '\0' ||
       std::strlen(absPath) >= sizeof(currentPath_)) return false;
 
@@ -123,6 +123,10 @@ bool Player::open(const char* absPath) {
   seekDeltaMs_.store(0);
   autoNextPending_.store(false);
   resetTrackPublication();  // a new name must not display the old track's duration
+  startSeekMs_.store(startPositionMs);
+  // Publish the resume point now: a snapshot taken before the task's first
+  // decode must not persist a transient zero over the saved bookmark.
+  publishedPositionMs_.store(startPositionMs);
   state_.store(PlayState::Playing);  // The UI shows playback while the decoder opens.
 
   // Mark ownership before creation. The stack size is passed in bytes.
@@ -226,6 +230,31 @@ void Player::audioTaskMain() {
   publishedSampleRate_.store(fmt.sampleRate);
   publishedDurationMs_.store(fmt.durationMs);
   publishedDurationEstimated_.store(fmt.durationEstimated);
+
+  // Resume the saved position after the decoder opens and before the first
+  // output write. Pause and relative-seek requests that arrive during this
+  // startup stay pending for the loop below.
+  uint32_t startMs = startSeekMs_.exchange(0);
+  if (startMs != 0 && fmt.durationMs != 0 && !fmt.durationEstimated &&
+      startMs > fmt.durationMs) {
+    // The bookmark sits past a known exact end: restart from zero. Do not
+    // clamp against an estimated duration; the seek itself stays bounded.
+    startMs = 0;
+    publishedPositionMs_.store(0);
+  }
+  if (startMs != 0) {
+    // Nothing has reached AudioOut yet, so the seek needs no resetStream.
+    if (!decoder_->seekMs(startMs)) {
+      state_.store(PlayState::Error);
+      publishError(PlayerError::SeekError);
+#if AUDIO_DIAG
+      audioDiagExit(currentPath_, &fmt, 0, "start-seek-failed");
+#endif
+      finishAudioTask();
+      return;
+    }
+    publishedPositionMs_.store(decoder_->positionMs());
+  }
 
   // All AudioOut control, rate, reset, and write calls stay on this task.
   if (!out_->setSampleRate(fmt.sampleRate)) {
@@ -379,7 +408,7 @@ void Player::seekRelative(int deltaSeconds) {
 
 #else
 
-bool Player::open(const char*) { return false; }
+bool Player::open(const char*, uint32_t) { return false; }
 void Player::stop() {}
 void Player::togglePause() {}
 void Player::seekRelative(int) {}

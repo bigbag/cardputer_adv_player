@@ -34,7 +34,7 @@ void App::begin() {
   applySettings();
   // Create the config file if the card does not contain one.
   if (browser_.sdOk() && !SD.exists(Settings::kConfigPath)) {
-    settings_.save();
+    saveSettings(true);
   }
 
   // The browser location is independent of the last played track.
@@ -68,21 +68,33 @@ void App::closeSettings() {
 
 void App::persistSettings() {
   applySettings();
-  if (settings_.save()) {
-    browserLocationDirty_ = false;
-  } else {
-    ui_.showToast("Save fail (SD?)", millis());
-  }
+  saveSettings(true);
 }
 
-void App::rememberLastPath(const char* absPath) {
-  if (!absPath || absPath[0] != '/') return;
-  const char* prev = settings_.lastPath();
-  if (prev && std::strcmp(prev, absPath) == 0) return;
-  settings_.setLastPath(absPath);
-  if (settings_.save()) {
+bool App::updateBookmark(uint32_t nowMs) {
+  const char* currentPath = player_.currentPath();
+  if (!currentPath || currentPath[0] != '/') return bookmarkCheckpoint_.due(nowMs);
+
+  const PlayerSnapshot player = player_.snapshot();
+  const bool trackChanged = std::strcmp(currentPath, settings_.lastPath()) != 0;
+  const uint32_t position = player.state == PlayState::Done ? 0 : player.positionMs;
+  settings_.setLastPath(currentPath);
+  settings_.setLastPositionMs(position);
+  return bookmarkCheckpoint_.update(nowMs, player.state, position, trackChanged);
+}
+
+bool App::saveSettings(bool showError) {
+  updateBookmark(millis());
+  const bool saved = settings_.save();
+  const uint32_t now = millis();
+  bookmarkCheckpoint_.attempted(now, saved);
+  if (saved) {
     browserLocationDirty_ = false;
+  } else {
+    browserLocationChangedAtMs_ = now;
+    if (showError) ui_.showToast("Save fail (SD?)", now);
   }
+  return saved;
 }
 
 void App::rememberBrowserLocation() {
@@ -93,15 +105,7 @@ void App::rememberBrowserLocation() {
 
 void App::flushBrowserLocation(bool showError) {
   if (!browserLocationDirty_) return;
-  if (settings_.save()) {
-    browserLocationDirty_ = false;
-  } else {
-    // Retry after another debounce interval, not on every loop iteration.
-    browserLocationChangedAtMs_ = millis();
-    if (showError) {
-      ui_.showToast("Save fail (SD?)", millis());
-    }
-  }
+  saveSettings(showError);
 }
 
 void App::restoreBrowserLocation() {
@@ -122,7 +126,7 @@ void App::resumeLastTrack() {
   }
 
   Serial.printf("[app] resume last: %s\n", last);
-  if (player_.open(last)) {
+  if (player_.open(last, settings_.lastPositionMs())) {
     screen_ = Screen::Playing;
   }
 }
@@ -151,12 +155,10 @@ void App::updateIdlePower(uint32_t nowMs, PlayState state) {
   if (!idleTimeout_.expired(nowMs, settings_.idleTimeoutMs(),
                             state == PlayState::Playing)) return;
 
-  if (!settings_.save()) {
+  if (!saveSettings(true)) {
     noteActivity(millis());
-    ui_.showToast("Save fail (SD?)", millis());
     return;
   }
-  browserLocationDirty_ = false;
   player_.stop();
   audio_.end();
   SD.end();
@@ -169,10 +171,6 @@ void App::loop() {
   const uint32_t now = millis();
   M5Cardputer.update();
   player_.service();
-  // Save the last track when its path changes.
-  // Keep this active while the display shows the Browser screen.
-  const char* currentPath = player_.currentPath();
-  if (currentPath && currentPath[0] == '/') rememberLastPath(currentPath);
 
   Action a = input_.poll(screen_);
   bool forceUi = false;
@@ -191,6 +189,8 @@ void App::loop() {
     }
     forceUi = true;
   }
+  if (updateBookmark(millis())) saveSettings(true);
+
 
   if (browserLocationDirty_ &&
       millis() - browserLocationChangedAtMs_ >= cfg::kBrowserLocationSaveDelayMs) {
@@ -340,14 +340,10 @@ void App::handlePlaying(Action a) {
     case Action::NextTrack:
       if (!player_.nextTrack()) {
         ui_.showToast("Last track", millis());
-      } else {
-        rememberLastPath(player_.currentPath());
       }
       break;
     case Action::PrevTrack:
-      if (player_.prevTrack()) {
-        rememberLastPath(player_.currentPath());
-      }
+      player_.prevTrack();
       break;
     case Action::Back:
       screen_ = Screen::Browse;
@@ -466,11 +462,11 @@ void App::playSelection() {
   const DirEntry& e = browser_.entries()[browser_.cursor()];
   if (!path::join(absPath, sizeof(absPath), browser_.path(), e.name)) return;
   rememberBrowserLocation();
+  updateBookmark(millis());
+  const uint32_t startPosition = std::strcmp(absPath, settings_.lastPath()) == 0
+                                     ? settings_.lastPositionMs() : 0;
   Serial.printf("[app] play %s\n", absPath);
-  if (player_.open(absPath)) {
-    // rememberLastPath() combines both saves when the track changes.
-    // Flush the browser location even if the user selects the same track again.
-    rememberLastPath(absPath);
+  if (player_.open(absPath, startPosition)) {
     flushBrowserLocation(true);
     screen_ = Screen::Playing;
   }

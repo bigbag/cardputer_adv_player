@@ -190,11 +190,37 @@ one wide range. Use low levels for headphones. Use high levels for the
 built-in speaker.
 
 The device saves settings to `/.asvmp3/config.cfg` on each change. Saved
-settings include the last played path and the on-boot mode.
+settings include the last played path, its playback position, and the on-boot mode.
 
 The **On boot** setting controls startup behavior.
-**play** restores and starts the last track if it still exists.
+**play** restores and starts the last track at its saved position if it still exists.
 **browse** restores the Browser without playback. **off** ignores the saved track path.
+
+### Playback bookmark
+
+The device keeps one bookmark: the active file path and its playback time.
+It saves the position every 10 seconds during playback, on pause, and before idle shutdown.
+The save interval stays active on every screen and while the display is off.
+A paused seek also saves the new position. A completed track resets the position to zero.
+Starting another file replaces the bookmark. The device does not keep a per-file history.
+
+**On boot = play** resumes the saved file automatically.
+With **browse** or **off**, select the same file in Browse to resume it.
+Select another file to start from zero. Press **Previous** after 3 seconds to restart a track.
+
+The config keys are `last_path` and `last_position_ms`.
+Old configs without a position start at zero.
+MP3 resume uses approximate seeking. It is not sample-exact.
+With successful saves, a sudden power loss normally loses at most about 10 seconds of progress,
+plus the seek error. A failed SD write can lose more progress.
+The device reports save failures and retries them. A failed shutdown save keeps it awake.
+
+Config replacement keeps the previous complete file as `config.cfg.bak`.
+If the main config is missing at startup, the device loads this backup.
+It does not load an incomplete `config.cfg.tmp` file.
+This recovery does not prevent FAT or SD corruption during a power loss.
+
+### Browser location
 
 The Browser also remembers its last folder and its highlighted entry. This
 browser location is independent of the last played track. The device
@@ -357,7 +383,7 @@ The full on-device matrix and controlled listening comparisons remain incomplete
 11. Change settings. Restart the device. Check that it restores settings from `/.asvmp3/config.cfg`.
 12. Select an entry in a nested Browser folder. Restart the device.
     Check that it restores the folder and selected entry.
-13. Set **On boot = play**. Restart the device. Check that the last track starts.
+13. Set **On boot = play**. Restart the device. Check that the last track resumes at its saved position.
     Press **Back** or **P**. Check that the browser restores its saved location.
 14. Check **On boot = browse** and **off**. Both modes restore the Browser without playback.
 15. Browse other folders during playback.
@@ -395,11 +421,26 @@ The full on-device matrix and controlled listening comparisons remain incomplete
     Check **Idle off = never** and an enabled timeout.
     Check that ignored keys do not delay shutdown.
     Restart the device. Check that the keyboard starts unlocked.
+28. Play an MP3 for at least 30 seconds. Turn the power off during playback.
+    Start the device with **On boot = play**. Check the resumed position.
+    Repeat with **browse** and select the same file. Check that another file starts at zero.
+29. Pause, seek while paused, and wait for idle shutdown. Restart and check the saved position.
+    Finish a track with Auto-next disabled. Check that selecting it again starts at zero.
+    Enable Auto-next. Check that the bookmark changes to the next file.
+30. Listen during several periodic saves on Playing, Browse, Settings, and System.
+    Repeat with the display off. Check for audible gaps.
+31. Test save failures with an unavailable SD card and a card that rejects writes.
+    Check the error message and bounded retries. Check that failed saves prevent idle shutdown.
+    Use a spare card for power-cut checks. Keep a separate copy of its files.
+32. Keep only a complete `config.cfg.bak` and an incomplete `config.cfg.tmp` in `/.asvmp3/`.
+    Boot and check that settings and the bookmark come from the backup.
+    Check that the next successful save creates `config.cfg`.
 
 **Hardware validation status:** host tests and the firmware build pass.
 The user reports that FLAC playback is unusable after full device testing.
 Heap and stack margins, SD timing, and decode and seek times remain unmeasured.
 The full on-device checklist remains incomplete.
+Bookmark power-cut recovery and audible continuity during periodic saves are not yet checked on hardware.
 
 ## Project layout
 

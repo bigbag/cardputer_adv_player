@@ -61,6 +61,7 @@ constexpr uint32_t kPrevRestartMs = 3000;
 constexpr int kDefaultVolumePercent = 30;
 constexpr uint32_t kToastMs = 1500;
 constexpr uint32_t kBrowserLocationSaveDelayMs = 750;
+constexpr uint32_t kBookmarkSaveIntervalMs = 10000;
 
 // Audio task
 constexpr uint32_t kDefaultSampleRate = 44100;
