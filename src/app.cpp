@@ -43,7 +43,7 @@ void App::begin() {
 
   lastActivityMs_ = millis();
   idleTimeout_.reset(lastActivityMs_);
-  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, lastActivityMs_, true);
+  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, input_.locked(), lastActivityMs_, true);
 }
 
 void App::applySettings() {
@@ -133,7 +133,7 @@ void App::noteActivity(uint32_t nowMs) {
   if (!ui_.displayOn()) {
     ui_.setDisplayOn(true);
     M5Cardputer.Display.setBrightness(settings_.brightness());
-    ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, nowMs, true);
+    ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, input_.locked(), nowMs, true);
   }
 }
 
@@ -178,7 +178,7 @@ void App::loop() {
   bool forceUi = false;
   if (a != Action::None) {
     noteActivity(now);
-    handle(a);
+    if (a != Action::ToggleLock) handle(a);
     forceUi = true;
   }
 
@@ -198,7 +198,7 @@ void App::loop() {
   }
 
   const PlayerSnapshot player = player_.snapshot();
-  ui_.render(screen_, browser_.snapshot(), player, settings_, now, forceUi);
+  ui_.render(screen_, browser_.snapshot(), player, settings_, input_.locked(), now, forceUi);
   updateDisplayPower(now);
   updateIdlePower(millis(), player.state);
 

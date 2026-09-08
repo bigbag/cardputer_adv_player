@@ -110,6 +110,19 @@ The device stores settings in this hidden directory on the SD card:
 
 This key map matches the firmware file `src/input.cpp`:
 
+### Keyboard lock (all screens)
+
+- **Fn + L** — Lock or unlock the keyboard. Press only these two keys.
+  Release all keys before the next lock or unlock command.
+- While locked, the player ignores all other keyboard controls.
+  This includes volume, pause, seek, track selection, and screen navigation.
+- The hint bar shows `LOCKED: Fn+L unlock` while the display is on.
+- Playback and Auto-next continue. The screen timeout and idle shutdown rules stay active.
+  Ignored keys do not wake the display or restart either timer.
+- Unlock wakes the display. Release all keys before you use another control.
+- The device starts unlocked after a restart. It does not save the lock state.
+  The lock prevents accidental key presses. It is not a security feature.
+
 ### Navigation diamond (physical keys)
 
 ```text
@@ -213,7 +226,8 @@ Auto-next is OFF or no next audio file exists.
 - The backlight turns off after the screen timeout if no mapped command occurs.
   Playback continues. The default timeout is 10 s.
   You can set the timeout to **never** in Settings.
-- A mapped command wakes the screen. The device also processes the command.
+- An accepted command wakes the screen. The device also processes the command.
+  While locked, only **Fn + L** is accepted.
 - The Now Playing screen updates the time and the progress bar without a
   full-screen redraw. This reduces flicker.
 - A separate battery widget appears at the top-right of each screen.
@@ -368,6 +382,19 @@ The full on-device matrix and controlled listening comparisons remain incomplete
 23. Put MP3, WAV, and FLAC files in one folder.
     Check that the browser lists only MP3 and WAV files.
     Check that next, previous, and Auto-next skip FLAC files.
+24. Press **Fn + L** on each screen. Check that the hint bar shows the lock state.
+    Check that volume, pause, seek, track, and navigation keys have no effect.
+    Check that playback and Auto-next continue while locked.
+25. Hold **Fn + L**. Press and release another key while you hold the chord.
+    Check that the lock changes only once. Release all keys.
+    Press **Fn + L** again. Check that the keyboard unlocks.
+26. Let the display turn off while locked. Press ordinary controls.
+    Check that the display stays off. Press **Fn + L**.
+    Check that the display wakes and the normal hint returns.
+27. With playback stopped, check idle shutdown while locked.
+    Check **Idle off = never** and an enabled timeout.
+    Check that ignored keys do not delay shutdown.
+    Restart the device. Check that the keyboard starts unlocked.
 
 **Hardware validation status:** host tests and the firmware build pass.
 The user reports that FLAC playback is unusable after full device testing.

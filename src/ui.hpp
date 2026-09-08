@@ -13,6 +13,7 @@ class Ui {
               const BrowseSnapshot& browse,
               const PlayerSnapshot& player,
               const Settings& settings,
+              bool locked,
               uint32_t nowMs,
               bool force = false);
 
@@ -45,6 +46,7 @@ class Ui {
   bool hasLastPlayer_ = false;
   bool hasLastSettings_ = false;
   bool displayOn_ = true;
+  bool locked_ = false;
   BatteryReading battery_;
   uint32_t lastSystemMs_ = 0;
 

@@ -5,11 +5,22 @@ void Input::begin() {}
 
 Action Input::poll(Screen screen) {
   // The caller must call M5Cardputer.update() before poll. App::loop does this.
-  if (!M5Cardputer.Keyboard.isChange() || !M5Cardputer.Keyboard.isPressed()) {
+  const bool changed = M5Cardputer.Keyboard.isChange();
+  const uint8_t pressed = M5Cardputer.Keyboard.isPressed();
+  if (pressed == 0) {
+    waitForRelease_ = false;
     return Action::None;
   }
 
   const Keyboard_Class::KeysState& st = M5Cardputer.Keyboard.keysState();
+  if (waitForRelease_) return Action::None;
+  if (pressed == 2 && st.fn && st.word.size() == 1 &&
+      (st.word[0] == 'l' || st.word[0] == 'L')) {
+    locked_ = !locked_;
+    waitForRelease_ = true;
+    return Action::ToggleLock;
+  }
+  if (locked_ || !changed) return Action::None;
 
   // Special keys are not part of st.word.
   if (st.enter) {

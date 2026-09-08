@@ -118,7 +118,13 @@ product:
 - **`App`** (`src/app.cpp`) controls the Browse, Playing, Settings, and System screens.
   It applies settings. It saves `last_path` and the browser location.
   It calls the `Player` controls.
+- **`Input`** (`src/input.cpp`) holds the keyboard lock state in memory.
+  Fn+L toggles the lock on every screen.
+  Input waits for all keys to be released after each toggle.
+  It filters locked controls before App updates activity timers or handles commands.
+  Lock changes do not send playback commands or write settings.
 - **`Ui`** (`src/ui.cpp`) draws the screens and a shared battery widget.
+  The hint bar shows the unlock chord while the keyboard is locked.
   System shows CPU, memory, uptime, SD status, and battery voltage.
   Every five seconds with the display on, the UI starts a batch of 16 voltage
   readings through `M5.Power`. The readings are at least 20 ms apart.

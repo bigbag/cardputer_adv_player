@@ -141,6 +141,7 @@ bool Ui::render(Screen screen,
                 const BrowseSnapshot& browse,
                 const PlayerSnapshot& player,
                 const Settings& settings,
+                bool locked,
                 uint32_t nowMs,
                 bool force) {
   if (!displayOn_) {
@@ -149,6 +150,10 @@ bool Ui::render(Screen screen,
       lastToastExp_ = 0;
     }
     return false;
+  }
+  if (locked != locked_) {
+    locked_ = locked;
+    force = true;
   }
 
   const int previousBatteryMv = battery_.millivolts();
@@ -509,6 +514,7 @@ void Ui::drawSystem(const BrowseSnapshot& b, uint32_t nowMs, bool full) {
 }
 
 void Ui::drawHint(const char* text) {
+  if (locked_) text = "LOCKED: Fn+L unlock";
   if (text && std::strcmp(text, lastHint_) == 0) {
     return;
   }
