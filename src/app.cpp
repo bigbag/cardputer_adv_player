@@ -115,7 +115,7 @@ void App::restoreBrowserLocation() {
 }
 
 void App::resumeLastTrack() {
-  if (!browser_.sdOk() || settings_.onBoot() != OnBootMode::Play) return;
+  if (!browser_.sdOk()) return;
 
   const char* last = settings_.lastPath();
   if (!last || last[0] != '/' || !SD.exists(last)) {
@@ -126,7 +126,7 @@ void App::resumeLastTrack() {
   }
 
   Serial.printf("[app] resume last: %s\n", last);
-  if (player_.open(last, settings_.lastPositionMs())) {
+  if (player_.open(last, settings_.lastPositionMs(), true)) {
     screen_ = Screen::Playing;
   }
 }
@@ -383,11 +383,7 @@ void App::handleSettings(Action a) {
           player_.setAutoNext(settings_.autoNext());
           changed = true;
           break;
-        case 5:
-          settings_.cycleOnBoot(+1);
-          changed = true;
-          break;
-        case 6: settings_.cycleIdleTimeout(+1); changed = true; break;
+        case 5: settings_.cycleIdleTimeout(+1); changed = true; break;
         default: break;
       }
       break;
@@ -419,11 +415,7 @@ void App::handleSettings(Action a) {
           player_.setAutoNext(settings_.autoNext());
           changed = true;
           break;
-        case 5:
-          settings_.cycleOnBoot(-1);
-          changed = true;
-          break;
-        case 6: settings_.cycleIdleTimeout(-1); changed = true; break;
+        case 5: settings_.cycleIdleTimeout(-1); changed = true; break;
         default: break;
       }
       break;
@@ -437,11 +429,7 @@ void App::handleSettings(Action a) {
           player_.setAutoNext(settings_.autoNext());
           changed = true;
           break;
-        case 5:
-          settings_.cycleOnBoot(+1);
-          changed = true;
-          break;
-        case 6: settings_.cycleIdleTimeout(+1); changed = true; break;
+        case 5: settings_.cycleIdleTimeout(+1); changed = true; break;
         default: break;
       }
       break;

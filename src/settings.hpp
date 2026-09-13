@@ -33,10 +33,6 @@ class Settings {
   void setAutoNext(bool on);
   void toggleAutoNext();
 
-  OnBootMode onBoot() const { return onBoot_; }
-  void setOnBoot(OnBootMode m);
-  void cycleOnBoot(int delta);  // +1 selects Play, Browse, Off. -1 reverses the order.
-
   size_t themeIndex() const { return themeIndex_; }
   void setThemeIndex(size_t i);
   void cycleTheme(int delta);
@@ -54,7 +50,7 @@ class Settings {
   const BrowserLocation& browserLocation() const { return browserLocation_; }
   void setBrowserLocation(const BrowserLocation& location);
 
-  static constexpr size_t kCount = 7;
+  static constexpr size_t kCount = 6;
   size_t cursor() const { return cursor_; }
   void moveCursor(int delta);
 
@@ -77,7 +73,6 @@ class Settings {
   uint32_t displayTimeoutMs_ = 10000;
   uint32_t idleTimeoutMs_ = 0;
   bool autoNext_ = true;
-  OnBootMode onBoot_ = OnBootMode::Browse;
   size_t themeIndex_ = 0;
   size_t cursor_ = 0;
   char lastPath_[cfg::kMaxPathLen]{};

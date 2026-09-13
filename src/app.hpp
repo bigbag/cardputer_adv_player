@@ -30,7 +30,7 @@ class App {
   void rememberBrowserLocation();
   void flushBrowserLocation(bool showError);
   void restoreBrowserLocation();
-  void resumeLastTrack();  // Play the saved track at boot if the mode permits playback.
+  void resumeLastTrack();  // Open the saved track at boot, paused at its saved position.
   void playSelection();
   void noteActivity(uint32_t nowMs);
   void updateDisplayPower(uint32_t nowMs);

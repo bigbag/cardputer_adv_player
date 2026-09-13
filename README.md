@@ -172,15 +172,13 @@ Rows (change a value with `,` / `/`):
 - **Brightness** — lower / higher
 - **Scr timeout** — 5s / 10s / 30s / 60s / never
 - **Auto-next** — ON / OFF
-- **On boot** — play (start the last track automatically) / browse (open the
-  folder only; default) / off (ignore the last path)
 - **Idle off** — never / 5m / 30m / 60m (default: never)
 
 Keys:
 
 - **`;` / `.`** — Move the selection up or down
 - **`,` / `/`** — Decrease or increase the value
-- **`Enter` / `Space`** — Cycle theme / screen timeout / auto-next / on boot
+- **`Enter` / `Space`** — Cycle theme / screen timeout / auto-next
   / idle off
 - **`Backspace` / `S`** — Exit Settings. The device saves each setting when you change it.
 - **`I`** — System information. Return to the same Settings row with **I** or **Backspace**.
@@ -190,11 +188,11 @@ one wide range. Use low levels for headphones. Use high levels for the
 built-in speaker.
 
 The device saves settings to `/.asvmp3/config.cfg` on each change. Saved
-settings include the last played path, its playback position, and the on-boot mode.
+settings include the last played path and its playback position.
 
-The **On boot** setting controls startup behavior.
-**play** restores and starts the last track at its saved position if it still exists.
-**browse** restores the Browser without playback. **off** ignores the saved track path.
+On startup the device restores the Browser location and opens the last played
+file at its saved position on the Playing screen. The file stays paused until
+you press **Space**. If the file no longer exists, the device opens the Browser.
 
 ### Playback bookmark
 
@@ -204,9 +202,9 @@ The save interval stays active on every screen and while the display is off.
 A paused seek also saves the new position. A completed track resets the position to zero.
 Starting another file replaces the bookmark. The device does not keep a per-file history.
 
-**On boot = play** resumes the saved file automatically.
-With **browse** or **off**, select the same file in Browse to resume it.
-Select another file to start from zero. Press **Previous** after 3 seconds to restart a track.
+The device resumes the saved file automatically on startup, paused at its
+saved position. Select another file to start from zero.
+Press **Previous** after 3 seconds to restart a track.
 
 The config keys are `last_path` and `last_position_ms`.
 Old configs without a position start at zero.
@@ -383,9 +381,9 @@ The full on-device matrix and controlled listening comparisons remain incomplete
 11. Change settings. Restart the device. Check that it restores settings from `/.asvmp3/config.cfg`.
 12. Select an entry in a nested Browser folder. Restart the device.
     Check that it restores the folder and selected entry.
-13. Set **On boot = play**. Restart the device. Check that the last track resumes at its saved position.
-    Press **Back** or **P**. Check that the browser restores its saved location.
-14. Check **On boot = browse** and **off**. Both modes restore the Browser without playback.
+13. Restart the device. Check that the last track opens paused at its saved position.
+    Press **Space** to start it. Press **Back** or **P**. Check that the browser restores its saved location.
+14. Remove or rename the saved last track. Restart the device. Check that it opens the Browser.
 15. Browse other folders during playback.
     Check that next, previous, and automatic track changes still use the playing track's folder.
 16. Remove the saved Browser folder or item. Check that the Browser opens root `/`.
@@ -422,8 +420,8 @@ The full on-device matrix and controlled listening comparisons remain incomplete
     Check that ignored keys do not delay shutdown.
     Restart the device. Check that the keyboard starts unlocked.
 28. Play an MP3 for at least 30 seconds. Turn the power off during playback.
-    Start the device with **On boot = play**. Check the resumed position.
-    Repeat with **browse** and select the same file. Check that another file starts at zero.
+    Start the device. Check that the last track opens paused at the saved position.
+    Select another file in Browse. Check that it starts at zero.
 29. Pause, seek while paused, and wait for idle shutdown. Restart and check the saved position.
     Finish a track with Auto-next disabled. Check that selecting it again starts at zero.
     Enable Auto-next. Check that the bookmark changes to the next file.

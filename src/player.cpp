@@ -106,7 +106,7 @@ void Player::waitTaskGone() {
   }
 }
 
-bool Player::open(const char* absPath, uint32_t startPositionMs) {
+bool Player::open(const char* absPath, uint32_t startPositionMs, bool startPaused) {
   if (!out_ || !absPath || absPath[0] == '\0' ||
       std::strlen(absPath) >= sizeof(currentPath_)) return false;
 
@@ -119,7 +119,7 @@ bool Player::open(const char* absPath, uint32_t startPositionMs) {
 
   // Clear the prior auto-next event and all requests for the new track.
   stopReq_.store(false);
-  paused_.store(false);
+  paused_.store(startPaused);
   seekDeltaMs_.store(0);
   autoNextPending_.store(false);
   resetTrackPublication();  // a new name must not display the old track's duration
@@ -127,7 +127,7 @@ bool Player::open(const char* absPath, uint32_t startPositionMs) {
   // Publish the resume point now: a snapshot taken before the task's first
   // decode must not persist a transient zero over the saved bookmark.
   publishedPositionMs_.store(startPositionMs);
-  state_.store(PlayState::Playing);  // The UI shows playback while the decoder opens.
+  state_.store(startPaused ? PlayState::Paused : PlayState::Playing);  // The UI shows the target state while the decoder opens.
 
   // Mark ownership before creation. The stack size is passed in bytes.
   audioTaskRunning_.store(true, std::memory_order_release);
@@ -408,7 +408,7 @@ void Player::seekRelative(int deltaSeconds) {
 
 #else
 
-bool Player::open(const char*, uint32_t) { return false; }
+bool Player::open(const char*, uint32_t, bool) { return false; }
 void Player::stop() {}
 void Player::togglePause() {}
 void Player::seekRelative(int) {}

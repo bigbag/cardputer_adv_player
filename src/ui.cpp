@@ -106,7 +106,6 @@ bool Ui::settingsChanged(const Settings& s) const {
          cur.displayTimeoutMs != lastSettings_.displayTimeoutMs ||
          cur.idleTimeoutMs != lastSettings_.idleTimeoutMs ||
          cur.autoNext != lastSettings_.autoNext ||
-         cur.onBoot != lastSettings_.onBoot ||
          cur.themeIndex != lastSettings_.themeIndex ||
          cur.cursor != lastSettings_.cursor;
 }

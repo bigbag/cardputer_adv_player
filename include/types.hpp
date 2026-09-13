@@ -8,7 +8,6 @@ enum class PlayState : uint8_t { Idle, Playing, Paused, Done, Error };
 enum class PlayerError : uint8_t {
   None, CannotDecode, BadFormat, DecodeError, AudioOutputError, TaskCreateError, SeekError
 };
-enum class OnBootMode : uint8_t { Play, Browse, Off };
 
 struct DirEntry {
   char name[cfg::kMaxNameLen];
@@ -51,7 +50,6 @@ struct SettingsSnapshot {
   uint32_t displayTimeoutMs;  // 0 disables the timeout
   uint32_t idleTimeoutMs;  // 0 disables the timeout
   bool autoNext;
-  OnBootMode onBoot;
   size_t themeIndex;
   size_t cursor;
 };

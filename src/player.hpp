@@ -19,7 +19,7 @@ class Player {
  public:
   bool begin(AudioOut* out, SdBrowser* browser);
   void end();
-  bool open(const char* absPath, uint32_t startPositionMs = 0);  // startPositionMs resumes before the first output
+  bool open(const char* absPath, uint32_t startPositionMs = 0, bool startPaused = false);  // startPositionMs resumes before the first output; startPaused holds the track paused until togglePause
   void stop();
   void togglePause();
   void setVolumePercent(int p);

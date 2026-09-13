@@ -153,7 +153,7 @@ product:
   It opens folders. It finds the next or previous audio file in the current folder.
 - **`Settings`** — stores `/.asvmp3/config.cfg` on the SD card. Keys
   include volume, theme, `last_path`, `last_position_ms`, `browser_path`,
-  `browser_item`, and `on_boot`.
+  and `browser_item`.
 
 ---
 
@@ -360,8 +360,8 @@ The decode step does not run on the UI task:
 - **Browser location** — the device restores `browser_path` and
   `browser_item` first. This location is independent of playback.
   The Browser opens root `/` if the folder or selected item does not exist.
-- **Bookmark / boot** — `on_boot=play` opens `last_path` at `last_position_ms`.
-  It keeps the Browser state. `browse` and `off` do not start playback.
+- **Bookmark / boot** — the device opens `last_path` at `last_position_ms`
+  on startup, paused until the user plays it. It keeps the Browser state.
   Selecting the bookmarked file in Browse also resumes it.
   Next, Previous, and Auto-next open tracks at zero.
 
