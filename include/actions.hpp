@@ -18,5 +18,7 @@ enum class Action : uint8_t {
   RetrySd,
   Settings,  // Open Settings with Tab or S.
   System,
+  Recent,
+
   ToggleLock,
 };

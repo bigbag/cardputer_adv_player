@@ -28,17 +28,47 @@ void Settings::applyDefaults() {
   lastPath_[0] = '\0';
   lastPositionMs_ = 0;
   browserLocation_ = {};
+  recent_.clear();
 }
+
 
 void Settings::setLastPath(const char* absPath) {
   if (!absPath) absPath = "";
   if (std::strcmp(lastPath_, absPath) == 0) return;
+  if (std::strlen(absPath) >= cfg::kMaxPathLen) return;
   std::strncpy(lastPath_, absPath, cfg::kMaxPathLen - 1);
   lastPath_[cfg::kMaxPathLen - 1] = '\0';
-  lastPositionMs_ = 0;  // A new file never keeps the previous position.
+  lastPositionMs_ = 0;
+  if (lastPath_[0] == '/') recent_.touch(lastPath_, 0);
 }
 
-void Settings::setLastPositionMs(uint32_t positionMs) { lastPositionMs_ = positionMs; }
+
+
+
+void Settings::setLastPositionMs(uint32_t positionMs) {
+  lastPositionMs_ = positionMs;
+  if (lastPath_[0] == '/') recent_.touch(lastPath_, positionMs);
+}
+
+
+void Settings::syncLastFromRecent() {
+  const RecentEntry* e = recent_.entry(0);
+  if (!e) {
+    lastPath_[0] = '\0';
+    lastPositionMs_ = 0;
+    return;
+  }
+  std::strncpy(lastPath_, e->path, cfg::kMaxPathLen - 1);
+  lastPath_[cfg::kMaxPathLen - 1] = '\0';
+  lastPositionMs_ = e->positionMs;
+}
+
+bool Settings::removeRecent(size_t i) {
+  if (!recent_.removeAt(i)) return false;
+  syncLastFromRecent();
+  return true;
+}
+
 
 void Settings::setBrowserLocation(const BrowserLocation& location) {
   if (location.path[0] == '/') {
@@ -80,9 +110,11 @@ bool Settings::parseLine(const char* line) {
   while (*v && std::isspace(static_cast<unsigned char>(*v))) ++v;
   size_t vlen = std::strlen(v);
   while (vlen > 0 && std::isspace(static_cast<unsigned char>(v[vlen - 1]))) --vlen;
+  const bool pathTooLong = vlen >= cfg::kMaxPathLen;
   if (vlen >= sizeof(val)) vlen = sizeof(val) - 1;
   std::memcpy(val, v, vlen);
   val[vlen] = '\0';
+
 
   for (char* p = key; *p; ++p) {
     *p = static_cast<char>(std::tolower(static_cast<unsigned char>(*p)));
@@ -133,6 +165,7 @@ bool Settings::parseLine(const char* line) {
       }
     }
   } else if (std::strcmp(key, "last_path") == 0 || std::strcmp(key, "lastpath") == 0) {
+    if (pathTooLong) return false;
     if (val[0] == '/') {
       std::strncpy(lastPath_, val, cfg::kMaxPathLen - 1);
       lastPath_[cfg::kMaxPathLen - 1] = '\0';
@@ -140,7 +173,6 @@ bool Settings::parseLine(const char* line) {
       lastPath_[0] = '\0';
     }
   } else if (std::strcmp(key, "last_position_ms") == 0) {
-    // Accept digits only. A sign, trailing text, or overflow keeps the old value.
     char* end = nullptr;
     errno = 0;
     const unsigned long value = std::strtoul(val, &end, 10);
@@ -149,11 +181,40 @@ bool Settings::parseLine(const char* line) {
                        value <= 0xFFFFFFFFul;
     if (valid) lastPositionMs_ = static_cast<uint32_t>(value);
   } else if (std::strcmp(key, "browser_path") == 0) {
+    if (pathTooLong) return false;
     if (val[0] == '/') {
       std::strncpy(browserLocation_.path, val, sizeof(browserLocation_.path) - 1);
       browserLocation_.path[sizeof(browserLocation_.path) - 1] = '\0';
     } else {
       browserLocation_.path[0] = '\0';
+    }
+  } else if (std::strncmp(key, "recent_", 7) == 0) {
+    char* idxEnd = nullptr;
+    errno = 0;
+    const unsigned long idx = std::strtoul(key + 7, &idxEnd, 10);
+    if (errno != 0 || idxEnd == key + 7 || idx >= cfg::kRecentCount) return false;
+    const RecentEntry* existing = recent_.entry(static_cast<size_t>(idx));
+    if (std::strcmp(idxEnd, "_path") == 0) {
+      if (pathTooLong) return false;
+      const uint32_t pos = existing ? existing->positionMs : 0;
+      recent_.setSlot(static_cast<size_t>(idx), val[0] == '/' ? val : "", pos);
+    } else if (std::strcmp(idxEnd, "_position_ms") == 0) {
+      char* end = nullptr;
+      errno = 0;
+      const unsigned long value = std::strtoul(val, &end, 10);
+      const bool valid = errno == 0 && end != val && *end == '\0' &&
+                         std::isdigit(static_cast<unsigned char>(val[0])) &&
+                         value <= 0xFFFFFFFFul;
+      if (valid) {
+        const size_t slot = static_cast<size_t>(idx);
+        if (existing) {
+          recent_.setPosition(slot, static_cast<uint32_t>(value));
+        } else {
+          recent_.setSlot(slot, "", static_cast<uint32_t>(value));
+        }
+      }
+    } else {
+      return false;
     }
   } else if (std::strcmp(key, "browser_item") == 0) {
     std::strncpy(browserLocation_.item, val, sizeof(browserLocation_.item) - 1);
@@ -161,6 +222,8 @@ bool Settings::parseLine(const char* line) {
   } else {
     return false;
   }
+
+
   return true;
 }
 
@@ -220,6 +283,14 @@ void Settings::load() {
   }
   f.close();
   clamp();
+  recent_.compact();
+  if (lastPath_[0] == '/') {
+    recent_.touch(lastPath_, lastPositionMs_);
+  } else if (recent_.size() > 0) {
+    syncLastFromRecent();
+  }
+
+
 
   Serial.printf("[cfg] loaded %s (%d keys) vol=%d bright=%u timeout=%lu theme=%s autonext=%d\n",
                 path, parsed, volume_, brightness_,
@@ -297,6 +368,17 @@ bool Settings::save() {
   ok = ok && wr(line);
   std::snprintf(line, sizeof(line), "browser_item=%s\n", browserLocation_.item);
   ok = ok && wr(line);
+  for (size_t i = 0; i < recent_.size(); ++i) {
+    const RecentEntry* e = recent_.entry(i);
+    if (!e) break;
+    std::snprintf(line, sizeof(line), "recent_%u_path=%s\n",
+                  static_cast<unsigned>(i), e->path);
+    ok = ok && wr(line);
+    std::snprintf(line, sizeof(line), "recent_%u_position_ms=%lu\n",
+                  static_cast<unsigned>(i), static_cast<unsigned long>(e->positionMs));
+    ok = ok && wr(line);
+  }
+
 
   f.flush();
   const size_t sz = f.size();

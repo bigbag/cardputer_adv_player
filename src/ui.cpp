@@ -136,6 +136,20 @@ void Ui::rememberSettings(const Settings& s) {
   hasLastSettings_ = true;
 }
 
+bool Ui::recentTimesChanged(const Settings& s) const {
+  return s.recentTimesDiffer(lastRecentPos_, lastRecentCount_);
+}
+
+void Ui::rememberRecentTimes(const Settings& s) {
+  lastRecentCount_ = s.recentCount();
+  for (size_t i = 0; i < lastRecentCount_ && i < cfg::kRecentCount; ++i) {
+    const RecentEntry* e = s.recentEntry(i);
+    lastRecentPos_[i] = e ? e->positionMs : 0;
+  }
+}
+
+
+
 bool Ui::render(Screen screen,
                 const BrowseSnapshot& browse,
                 const PlayerSnapshot& player,
@@ -185,10 +199,11 @@ bool Ui::render(Screen screen,
   const bool screenSwitch = (screen != lastScreen_);
   bool dirty = force || themeChanged || screenSwitch || toastAppeared || toastExpired;
   bool progressOnly = false;
-
   if (!dirty) {
     if (screen == Screen::Browse) {
       dirty = browseChanged(browse);
+    } else if (screen == Screen::Recent) {
+      dirty = browseChanged(browse) || recentTimesChanged(settings);
     } else if (screen == Screen::Playing) {
       if (playerChromeChanged(player)) {
         dirty = true;
@@ -203,6 +218,7 @@ bool Ui::render(Screen screen,
               browse.sdOk != lastSdOk_;
     }
   }
+
   if (!dirty) {
     if (batteryChanged) drawBattery();
     return batteryChanged;
@@ -224,6 +240,13 @@ bool Ui::render(Screen screen,
     const bool full = !hasLastBrowse_ || force || screenSwitch || toastExpired;
     drawBrowse(browse, full);
     rememberBrowse(browse);
+  } else if (screen == Screen::Recent) {
+    const bool full = !hasLastBrowse_ || force || screenSwitch || toastExpired;
+    drawRecent(browse, settings, full);
+    rememberBrowse(browse);
+    rememberRecentTimes(settings);
+
+
   } else if (screen == Screen::Playing) {
     if (progressOnly) {
       drawPlayingProgress(player);
@@ -339,8 +362,82 @@ void Ui::drawBrowse(const BrowseSnapshot& b, bool full) {
     d.drawString("* truncated", 2, truncY);
   }
 
-  drawHint(";. move  P play  S set  I sys");
+  drawHint(";. move  P play  R rec  S set");
+
 }
+
+void Ui::drawRecent(const BrowseSnapshot& b, const Settings& s, bool full) {
+  auto& d = M5Cardputer.Display;
+
+  if (full || std::strcmp(b.path, lastPath_) != 0) {
+    d.fillRect(0, 0, cfg::kScreenW, 11, theme_.bg);
+    d.setTextColor(theme_.dim, theme_.bg);
+    d.drawString("Recent", 2, 1);
+  }
+
+  const int listY = 12;
+  const int timeRight = cfg::kScreenW - 2;
+  const int nameRight = cfg::kScreenW - 56;
+
+
+  for (size_t i = 0; i < static_cast<size_t>(cfg::kMaxVisibleRows); ++i) {
+    const int y = listY + static_cast<int>(i) * cfg::kListRowH;
+    const bool rowVisible = (i < b.count);
+    bool needRow = full || !hasLastBrowse_ || b.count != lastCount_;
+    if (!needRow && rowVisible && hasLastBrowse_) {
+      const bool selNow = (i == b.cursor);
+      const bool selWas = (i == lastCursor_);
+      if (selNow != selWas) needRow = true;
+      if (!needRow && b.entries) {
+        if (std::strcmp(b.entries[i].name, lastEntries_[i].name) != 0) needRow = true;
+      }
+      if (!needRow) {
+        const RecentEntry* e = s.recentEntry(i);
+        const uint32_t pos = e ? e->positionMs : 0;
+        if (i >= lastRecentCount_ || pos / 1000 != lastRecentPos_[i] / 1000) {
+          needRow = true;
+        }
+      }
+
+    } else if (!needRow && !rowVisible && hasLastBrowse_) {
+      if (i < lastCount_) needRow = true;
+    }
+
+    if (!needRow) continue;
+
+    if (rowVisible && b.entries) {
+      const bool selected = (i == b.cursor);
+      const uint16_t bg = selected ? theme_.selectBg : theme_.bg;
+      const uint16_t fg = selected ? theme_.selectFg : theme_.fg;
+      d.fillRect(0, y, cfg::kScreenW, cfg::kListRowH, bg);
+      d.setTextColor(fg, bg);
+      char rowBuf[cfg::kMaxNameLen];
+      std::snprintf(rowBuf, sizeof(rowBuf), "%s", b.entries[i].name);
+      drawFileText(rowBuf, 4, y + 2, nameRight);
+      const RecentEntry* e = s.recentEntry(i);
+      if (e) {
+        const uint32_t sec = e->positionMs / 1000;
+        char timeBuf[16];
+        std::snprintf(timeBuf, sizeof(timeBuf), "%02lu:%02lu",
+                      static_cast<unsigned long>(sec / 60),
+                      static_cast<unsigned long>(sec % 60));
+
+        const int tw = d.textWidth(timeBuf);
+        d.drawString(timeBuf, timeRight - tw, y + 2);
+      }
+    } else {
+      d.fillRect(0, y, cfg::kScreenW, cfg::kListRowH, theme_.bg);
+    }
+  }
+
+  if (b.count == 0 && (full || lastCount_ != 0)) {
+    d.setTextColor(theme_.dim, theme_.bg);
+    d.drawString("(empty)", 4, listY + 2);
+  }
+
+  drawHint(";. move  Ent play  R back");
+}
+
 
 void Ui::drawPlayingProgress(const PlayerSnapshot& p) {
   auto& d = M5Cardputer.Display;
@@ -419,7 +516,8 @@ void Ui::drawPlaying(const PlayerSnapshot& p, bool full) {
     d.drawString(volBuf, 4, 74);
   }
 
-  drawHint(";. trk  P brws  [] seek  I sys");
+  drawHint(";. trk  P brws  R rec  [] seek");
+
 }
 
 void Ui::drawSettings(const Settings& s) {

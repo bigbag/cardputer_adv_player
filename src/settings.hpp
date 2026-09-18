@@ -2,6 +2,8 @@
 
 #include "types.hpp"
 #include "theme.hpp"
+#include "recent_list.hpp"
+
 #include <cstdint>
 
 // The SD card stores settings in /.asvmp3/config.cfg.
@@ -46,6 +48,15 @@ class Settings {
   // setLastPath resets the position when the path changes.
   uint32_t lastPositionMs() const { return lastPositionMs_; }
   void setLastPositionMs(uint32_t positionMs);
+  size_t recentCount() const { return recent_.size(); }
+  const RecentEntry* recentEntry(size_t i) const { return recent_.entry(i); }
+  bool removeRecent(size_t i);
+  bool recentTimesDiffer(const uint32_t* last, size_t lastCount) const {
+    return recent_.timesDiffer(last, lastCount);
+  }
+
+
+
 
   const BrowserLocation& browserLocation() const { return browserLocation_; }
   void setBrowserLocation(const BrowserLocation& location);
@@ -67,6 +78,8 @@ class Settings {
   void clamp();
   void applyDefaults();
   bool parseLine(const char* line);
+  void syncLastFromRecent();
+
 
   int volume_ = 45;
   uint8_t brightness_ = 128;
@@ -78,4 +91,6 @@ class Settings {
   char lastPath_[cfg::kMaxPathLen]{};
   uint32_t lastPositionMs_ = 0;
   BrowserLocation browserLocation_{};
+  RecentList recent_{};
+
 };

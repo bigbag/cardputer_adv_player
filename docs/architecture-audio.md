@@ -115,9 +115,10 @@ product:
 
 ### 2.1 Modules
 
-- **`App`** (`src/app.cpp`) controls the Browse, Playing, Settings, and System screens.
-  It saves the active-file bookmark and the browser location.
+- **`App`** (`src/app.cpp`) controls the Browse, Playing, Recent, Settings, and System screens.
+  It saves the active-file bookmark, the Recent list, and the browser location.
   It calls the `Player` controls.
+
 - **`Input`** (`src/input.cpp`) holds the keyboard lock state in memory.
   Fn+L toggles the lock on every screen.
   Input waits for all keys to be released after each toggle.
@@ -152,8 +153,9 @@ product:
 - **`SdBrowser`** lists the FAT directory with `readdir`.
   It opens folders. It finds the next or previous audio file in the current folder.
 - **`Settings`** — stores `/.asvmp3/config.cfg` on the SD card. Keys
-  include volume, theme, `last_path`, `last_position_ms`, `browser_path`,
-  and `browser_item`.
+  include volume, theme, `last_path`, `last_position_ms`, Recent slots,
+  `browser_path`, and `browser_item`.
+
 
 ---
 

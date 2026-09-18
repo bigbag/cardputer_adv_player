@@ -84,6 +84,10 @@ Action Input::poll(Screen screen) {
         // Request a switch between Browse and Playing.
         // Use ';' for the previous track.
         return Action::TogglePlayer;
+      case 'r':
+      case 'R':
+        return Action::Recent;
+
       default:
         break;
     }

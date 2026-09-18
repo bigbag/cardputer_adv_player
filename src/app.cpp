@@ -43,7 +43,8 @@ void App::begin() {
 
   lastActivityMs_ = millis();
   idleTimeout_.reset(lastActivityMs_);
-  ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, input_.locked(), lastActivityMs_, true);
+  ui_.render(screen_, viewSnapshot(), player_.snapshot(), settings_, input_.locked(), lastActivityMs_, true);
+
 }
 
 void App::applySettings() {
@@ -137,7 +138,8 @@ void App::noteActivity(uint32_t nowMs) {
   if (!ui_.displayOn()) {
     ui_.setDisplayOn(true);
     M5Cardputer.Display.setBrightness(settings_.brightness());
-    ui_.render(screen_, browser_.snapshot(), player_.snapshot(), settings_, input_.locked(), nowMs, true);
+    ui_.render(screen_, viewSnapshot(), player_.snapshot(), settings_, input_.locked(), nowMs, true);
+
   }
 }
 
@@ -198,7 +200,8 @@ void App::loop() {
   }
 
   const PlayerSnapshot player = player_.snapshot();
-  ui_.render(screen_, browser_.snapshot(), player, settings_, input_.locked(), now, forceUi);
+  ui_.render(screen_, viewSnapshot(), player, settings_, input_.locked(), now, forceUi);
+
   updateDisplayPower(now);
   updateIdlePower(millis(), player.state);
 
@@ -250,6 +253,22 @@ void App::handle(Action a) {
     return;
   }
 
+  if (a == Action::Recent && screen_ != Screen::Settings) {
+    if (screen_ == Screen::Recent) {
+      screen_ = recentReturn_;
+    } else {
+      if (screen_ == Screen::Browse) {
+        rememberBrowserLocation();
+        flushBrowserLocation(true);
+      }
+      recentReturn_ = screen_;
+      if (recentCursor_ >= settings_.recentCount()) recentCursor_ = 0;
+      screen_ = Screen::Recent;
+    }
+    return;
+  }
+
+
   switch (screen_) {
     case Screen::Browse:
       handleBrowse(a);
@@ -262,6 +281,10 @@ void App::handle(Action a) {
       break;
     case Screen::System:
       break;
+    case Screen::Recent:
+      handleRecent(a);
+      break;
+
   }
 }
 
@@ -459,3 +482,80 @@ void App::playSelection() {
     screen_ = Screen::Playing;
   }
 }
+
+void App::handleRecent(Action a) {
+  const size_t n = settings_.recentCount();
+  switch (a) {
+    case Action::Up:
+      if (n > 0 && recentCursor_ > 0) --recentCursor_;
+      break;
+    case Action::Down:
+      if (n > 0 && recentCursor_ + 1 < n) ++recentCursor_;
+      break;
+    case Action::Enter:
+    case Action::Space:
+      playRecent();
+      break;
+    case Action::Back:
+      screen_ = recentReturn_;
+      break;
+    default:
+      break;
+  }
+}
+
+void App::playRecent() {
+  const RecentEntry* e = settings_.recentEntry(recentCursor_);
+  if (!e) return;
+  char path[cfg::kMaxPathLen];
+  std::strncpy(path, e->path, sizeof(path) - 1);
+  path[sizeof(path) - 1] = '\0';
+  const uint32_t startPosition = e->positionMs;
+
+  if (!browser_.sdOk()) {
+    ui_.showToast("No SD card", millis());
+    return;
+  }
+  if (!SD.exists(path)) {
+    ui_.showToast("Missing", millis());
+    settings_.removeRecent(recentCursor_);
+    if (recentCursor_ >= settings_.recentCount() && recentCursor_ > 0) {
+      --recentCursor_;
+    }
+    saveSettings(true);
+    return;
+  }
+
+  updateBookmark(millis());
+  Serial.printf("[app] recent %s\n", path);
+  if (player_.open(path, startPosition)) {
+    saveSettings(true);
+    screen_ = Screen::Playing;
+  }
+}
+
+BrowseSnapshot App::viewSnapshot() {
+  return screen_ == Screen::Recent ? recentSnapshot() : browser_.snapshot();
+}
+
+BrowseSnapshot App::recentSnapshot() {
+  const size_t n = settings_.recentCount();
+  if (recentCursor_ >= n) recentCursor_ = n > 0 ? n - 1 : 0;
+  for (size_t i = 0; i < n; ++i) {
+    const RecentEntry* e = settings_.recentEntry(i);
+    recentEntries_[i] = {};
+    if (!e) continue;
+    path::fileName(recentEntries_[i].name, sizeof(recentEntries_[i].name), e->path);
+    recentEntries_[i].kind = path::kindFromName(recentEntries_[i].name);
+  }
+  BrowseSnapshot b{};
+  std::strncpy(b.path, "Recent", sizeof(b.path) - 1);
+  b.entries = recentEntries_;
+  b.count = n;
+  b.cursor = recentCursor_;
+  b.scroll = 0;
+  b.truncated = false;
+  b.sdOk = true;
+  return b;
+}
+

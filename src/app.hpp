@@ -21,6 +21,8 @@ class App {
   void handleBrowse(Action a);
   void handlePlaying(Action a);
   void handleSettings(Action a);
+  void handleRecent(Action a);
+
   void openSettings();
   void closeSettings();
   void applySettings();
@@ -32,6 +34,10 @@ class App {
   void restoreBrowserLocation();
   void resumeLastTrack();  // Open the saved track at boot, paused at its saved position.
   void playSelection();
+  void playRecent();
+  BrowseSnapshot viewSnapshot();
+  BrowseSnapshot recentSnapshot();
+
   void noteActivity(uint32_t nowMs);
   void updateDisplayPower(uint32_t nowMs);
   void updateIdlePower(uint32_t nowMs, PlayState state);
@@ -45,6 +51,10 @@ class App {
   Screen screen_ = Screen::Browse;
   Screen settingsReturn_ = Screen::Browse;
   Screen systemReturn_ = Screen::Browse;
+  Screen recentReturn_ = Screen::Browse;
+  size_t recentCursor_ = 0;
+  DirEntry recentEntries_[cfg::kRecentCount]{};
+
   uint32_t lastActivityMs_ = 0;
   IdleTimeout idleTimeout_;
   BookmarkCheckpoint bookmarkCheckpoint_;

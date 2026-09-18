@@ -141,6 +141,7 @@ This key map matches the firmware file `src/input.cpp`:
 - **`Enter`** — Open the selected folder or play the selected file
 - **`Space`** — Play the highlighted audio file
 - **`P`** — Show the Now Playing screen if the player has a track. Playback continues.
+- **`R`** — Recent files. Playback continues.
 - **`S` or `Tab`** — Settings
 - **`I`** — System information
 - **`Backspace` or `` ` ``** — Parent directory
@@ -161,7 +162,22 @@ This key map matches the firmware file `src/input.cpp`:
 - **`P`** — Return to Browse. Playback continues.
 - **`S` or `Tab`** — Open Settings.
 - **`I`** — System information. Playback continues.
+- **`R`** — Recent files. Playback continues.
 - **`Backspace`** — Return to Browse. Playback continues.
+
+### Recent (`R`)
+
+- **`;` / `.`** — Move the cursor up or down
+- **`Enter` / `Space`** — Play the selected file at its saved position
+- **`R` or `Backspace`** — Return to the previous screen
+- **`P`** — Now Playing if the player has a track
+- **`S` or `Tab`** — Settings
+- **`I`** — System information
+
+The list holds up to five unique files. The newest file is at the top.
+Each row shows the file name and the saved playback time.
+The Browser folder does not change.
+A missing file shows **Missing** and leaves the list.
 
 ### Settings (`S` / Tab)
 
@@ -188,7 +204,7 @@ one wide range. Use low levels for headphones. Use high levels for the
 built-in speaker.
 
 The device saves settings to `/.asvmp3/config.cfg` on each change. Saved
-settings include the last played path and its playback position.
+settings include the last played path, its playback position, and the Recent list.
 
 On startup the device restores the Browser location and opens the last played
 file at its saved position on the Playing screen. The file stays paused until
@@ -196,17 +212,23 @@ you press **Space**. If the file no longer exists, the device opens the Browser.
 
 ### Playback bookmark
 
-The device keeps one bookmark: the active file path and its playback time.
+The device keeps the active file path and its playback time as `last_path`
+and `last_position_ms`. It also keeps a Recent list of up to five unique files
+with a saved time for each file.
 It saves the position every 10 seconds during playback, on pause, and before idle shutdown.
 The save interval stays active on every screen and while the display is off.
 A paused seek also saves the new position. A completed track resets the position to zero.
-Starting another file replaces the bookmark. The device does not keep a per-file history.
+Starting another file moves that file to the top of Recent and keeps the previous
+file with its last saved time.
 
 The device resumes the saved file automatically on startup, paused at its
-saved position. Select another file to start from zero.
+saved position. Select another file in Browse to start from zero.
+Select a file in Recent to resume that file at its saved time.
 Press **Previous** after 3 seconds to restart a track.
 
-The config keys are `last_path` and `last_position_ms`.
+The config keys are `last_path`, `last_position_ms`, `recent_0_path`,
+`recent_0_position_ms`, and the same keys for slots 1 through 4.
+Old configs without Recent keys use `last_path` as the only Recent entry.
 Old configs without a position start at zero.
 MP3 resume uses approximate seeking. It is not sample-exact.
 With successful saves, a sudden power loss normally loses at most about 10 seconds of progress,
@@ -217,6 +239,7 @@ Config replacement keeps the previous complete file as `config.cfg.bak`.
 If the main config is missing at startup, the device loads this backup.
 It does not load an incomplete `config.cfg.tmp` file.
 This recovery does not prevent FAT or SD corruption during a power loss.
+
 
 ### Browser location
 
@@ -237,7 +260,8 @@ Auto-next is OFF or no next audio file exists.
 
 ### System information (`I`)
 
-- Press **I** from Browse, Now Playing, or Settings.
+- Press **I** from Browse, Now Playing, Recent, or Settings.
+
 - Press **I**, **Backspace**, or `` ` `` to return to the previous screen.
 - The screen shows the device, CPU model, CPU frequency, core count, flash
   size, free heap, uptime, SD mount status, and battery voltage.

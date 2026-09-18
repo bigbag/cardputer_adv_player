@@ -27,8 +27,9 @@ void test_lock_blocks_controls_on_every_screen() {
   Input input;
   TEST_ASSERT_EQUAL(Action::ToggleLock, press(input, "l", true));
   press(input, "");
-  for (Screen screen : {Screen::Browse, Screen::Playing, Screen::Settings, Screen::System}) {
-    for (char key : {';', '.', ',', '/', '[', ']', '`', ' ', 's', 'i', '=', '-', 'n', 'p', '\n', '\b', '\t'}) {
+  for (Screen screen : {Screen::Browse, Screen::Playing, Screen::Settings, Screen::System, Screen::Recent}) {
+    for (char key : {';', '.', ',', '/', '[', ']', '`', ' ', 's', 'i', 'r', '=', '-', 'n', 'p', '\n', '\b', '\t'}) {
+
       const char keys[] = {key, '\0'};
       TEST_ASSERT_EQUAL(Action::None, press(input, keys, false, screen));
       press(input, "", false, screen);
@@ -66,6 +67,14 @@ void test_chord_is_detected_when_key_count_does_not_change() {
   TEST_ASSERT_EQUAL(Action::ToggleLock, press(input, "l", true));
 }
 
+void test_r_requests_recent_on_browse_and_playing() {
+  Input input;
+  TEST_ASSERT_EQUAL(Action::Recent, press(input, "r", false, Screen::Browse));
+  press(input, "");
+  TEST_ASSERT_EQUAL(Action::Recent, press(input, "R", false, Screen::Playing));
+}
+
+
 void setUp() { M5Cardputer.Keyboard = {}; }
 void tearDown() {}
 
@@ -74,5 +83,7 @@ int main() {
   RUN_TEST(test_lock_blocks_controls_on_every_screen);
   RUN_TEST(test_chord_consumes_keys_until_full_release);
   RUN_TEST(test_chord_is_detected_when_key_count_does_not_change);
+  RUN_TEST(test_r_requests_recent_on_browse_and_playing);
+
   return UNITY_END();
 }

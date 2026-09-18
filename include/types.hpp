@@ -2,7 +2,8 @@
 #include "config.hpp"
 #include <cstdint>
 
-enum class Screen : uint8_t { Browse, Playing, Settings, System };
+enum class Screen : uint8_t { Browse, Playing, Settings, System, Recent };
+
 enum class EntryKind : uint8_t { Dir, Mp3, Wav };
 enum class PlayState : uint8_t { Idle, Playing, Paused, Done, Error };
 enum class PlayerError : uint8_t {

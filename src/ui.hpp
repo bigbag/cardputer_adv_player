@@ -24,6 +24,8 @@ class Ui {
  private:
   void drawBrowse(const BrowseSnapshot& b, bool full);
   void drawPlaying(const PlayerSnapshot& p, bool full);
+  void drawRecent(const BrowseSnapshot& b, const Settings& s, bool full);
+
   void drawPlayingProgress(const PlayerSnapshot& p);
   void drawSettings(const Settings& s);
   void drawSystem(const BrowseSnapshot& b, uint32_t nowMs, bool full);
@@ -34,6 +36,9 @@ class Ui {
   bool playerChanged(const PlayerSnapshot& p) const;
   bool playerChromeChanged(const PlayerSnapshot& p) const;
   bool settingsChanged(const Settings& s) const;
+  bool recentTimesChanged(const Settings& s) const;
+  void rememberRecentTimes(const Settings& s);
+
   void rememberBrowse(const BrowseSnapshot& b);
   void rememberPlayer(const PlayerSnapshot& p);
   void rememberSettings(const Settings& s);
@@ -57,6 +62,9 @@ class Ui {
   size_t lastScroll_ = 0;
   bool lastTruncated_ = false;
   bool lastSdOk_ = false;
+  uint32_t lastRecentPos_[cfg::kRecentCount]{};
+  size_t lastRecentCount_ = 0;
+
 
   PlayerSnapshot lastPlayer_{};
   SettingsSnapshot lastSettings_{};
