@@ -213,13 +213,15 @@ you press **Space**. If the file no longer exists, the device opens the Browser.
 ### Playback bookmark
 
 The device keeps the active file path and its playback time as `last_path`
-and `last_position_ms`. It also keeps a Recent list of up to five unique files
-with a saved time for each file.
+and `last_position_ms`. It also keeps a Recent list of up to five entries.
+Each entry holds the last file you played from one folder, with its saved time.
+Files in the root folder get one entry each.
 It saves the position every 10 seconds during playback, on pause, and before idle shutdown.
 The save interval stays active on every screen and while the display is off.
 A paused seek also saves the new position. A completed track resets the position to zero.
-Starting another file moves that file to the top of Recent and keeps the previous
-file with its last saved time.
+Starting a file from a folder already in Recent replaces that entry with the
+new file and moves the entry to the top. A file from a new folder adds an
+entry at the top. The oldest entry drops out at five entries.
 
 The device resumes the saved file automatically on startup, paused at its
 saved position. Select another file in Browse to start from zero.
