@@ -27,17 +27,13 @@ class RecentList {
 
     size_t existing = kCapacity;
     for (size_t i = 0; i < size_; ++i) {
-      if (sameSlot(entries_[i].path, absPath)) {
+      if (std::strcmp(entries_[i].path, absPath) == 0) {
         existing = i;
         break;
       }
     }
 
     if (existing == 0) {
-      if (std::strcmp(entries_[0].path, absPath) != 0) {
-        std::strncpy(entries_[0].path, absPath, sizeof(entries_[0].path) - 1);
-        entries_[0].path[sizeof(entries_[0].path) - 1] = '\0';
-      }
       entries_[0].positionMs = positionMs;
       return true;
     }
@@ -113,7 +109,7 @@ class RecentList {
       if (entries_[r].path[0] != '/') continue;
       bool dup = false;
       for (size_t k = 0; k < w; ++k) {
-        if (sameSlot(entries_[k].path, entries_[r].path)) {
+        if (std::strcmp(entries_[k].path, entries_[r].path) == 0) {
           dup = true;
           break;
         }
@@ -132,19 +128,6 @@ class RecentList {
   }
 
  private:
-  static size_t dirLen(const char* path) {
-    const char* slash = std::strrchr(path, '/');
-    if (!slash || slash == path) return 0;
-    return static_cast<size_t>(slash - path) + 1;
-  }
-
-  static bool sameSlot(const char* a, const char* b) {
-    const size_t la = dirLen(a);
-    const size_t lb = dirLen(b);
-    if (la != lb) return false;
-    if (la == 0) return std::strcmp(a, b) == 0;
-    return std::strncmp(a, b, la) == 0;
-  }
   RecentEntry entries_[kCapacity]{};
   size_t size_ = 0;
 };

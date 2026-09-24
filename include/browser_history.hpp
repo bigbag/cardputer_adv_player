@@ -28,6 +28,15 @@ class BrowserHistory {
     return true;
   }
 
+  bool pushIfViewChanged(const char* savedPath, size_t savedCursor, size_t savedScroll,
+                         const char* currentPath, size_t currentCursor) {
+    if (!savedPath || !currentPath) return false;
+    if (std::strcmp(savedPath, currentPath) == 0 && savedCursor == currentCursor) {
+      return savedPath[0] == '/';
+    }
+    return push(savedPath, savedCursor, savedScroll);
+  }
+
   bool peek(BrowserHistoryFrame* out) const {
     if (!out || size_ == 0) return false;
     *out = frames_[size_ - 1];

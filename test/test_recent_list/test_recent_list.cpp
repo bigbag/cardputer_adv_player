@@ -55,27 +55,31 @@ void test_touch_drops_oldest_when_full() {
   }
 }
 
-void test_touch_same_directory_replaces_file_and_moves_to_front() {
+void test_touch_same_directory_keeps_each_file_path() {
   RecentList recent;
   TEST_ASSERT_TRUE(recent.touch("/dir1/a.mp3", 10));
   TEST_ASSERT_TRUE(recent.touch("/dir2/b.mp3", 20));
   TEST_ASSERT_TRUE(recent.touch("/dir1/c.mp3", 30));
 
-  TEST_ASSERT_EQUAL_UINT(2, recent.size());
+  TEST_ASSERT_EQUAL_UINT(3, recent.size());
   TEST_ASSERT_EQUAL_STRING("/dir1/c.mp3", recent.entry(0)->path);
   TEST_ASSERT_EQUAL_UINT32(30, recent.entry(0)->positionMs);
   TEST_ASSERT_EQUAL_STRING("/dir2/b.mp3", recent.entry(1)->path);
   TEST_ASSERT_EQUAL_UINT32(20, recent.entry(1)->positionMs);
+  TEST_ASSERT_EQUAL_STRING("/dir1/a.mp3", recent.entry(2)->path);
+  TEST_ASSERT_EQUAL_UINT32(10, recent.entry(2)->positionMs);
 }
 
-void test_touch_front_directory_updates_file_in_place() {
+void test_touch_second_file_in_same_directory_keeps_both() {
   RecentList recent;
   TEST_ASSERT_TRUE(recent.touch("/dir1/a.mp3", 10));
   TEST_ASSERT_TRUE(recent.touch("/dir1/b.mp3", 20));
 
-  TEST_ASSERT_EQUAL_UINT(1, recent.size());
+  TEST_ASSERT_EQUAL_UINT(2, recent.size());
   TEST_ASSERT_EQUAL_STRING("/dir1/b.mp3", recent.entry(0)->path);
   TEST_ASSERT_EQUAL_UINT32(20, recent.entry(0)->positionMs);
+  TEST_ASSERT_EQUAL_STRING("/dir1/a.mp3", recent.entry(1)->path);
+  TEST_ASSERT_EQUAL_UINT32(10, recent.entry(1)->positionMs);
 }
 
 void test_touch_with_own_entry_path_updates_position_only() {
@@ -101,7 +105,7 @@ void test_touch_distinguishes_nested_directories() {
   TEST_ASSERT_EQUAL_UINT(2, recent.size());
 }
 
-void test_touch_same_directory_at_full_capacity_keeps_size() {
+void test_touch_new_file_in_full_list_keeps_other_file_from_same_directory() {
   RecentList recent;
   for (size_t i = 0; i < RecentList::kCapacity; ++i) {
     char path[20];
@@ -109,9 +113,9 @@ void test_touch_same_directory_at_full_capacity_keeps_size() {
     TEST_ASSERT_TRUE(recent.touch(path, static_cast<uint32_t>(i)));
   }
 
-  TEST_ASSERT_TRUE(recent.touch("/dir0/b.mp3", 99));
+  TEST_ASSERT_TRUE(recent.touch("/dir4/b.mp3", 99));
   TEST_ASSERT_EQUAL_UINT(RecentList::kCapacity, recent.size());
-  TEST_ASSERT_EQUAL_STRING("/dir0/b.mp3", recent.entry(0)->path);
+  TEST_ASSERT_EQUAL_STRING("/dir4/b.mp3", recent.entry(0)->path);
   TEST_ASSERT_EQUAL_UINT32(99, recent.entry(0)->positionMs);
   TEST_ASSERT_EQUAL_STRING("/dir4/a.mp3", recent.entry(1)->path);
   TEST_ASSERT_EQUAL_STRING("/dir3/a.mp3", recent.entry(2)->path);
@@ -174,16 +178,18 @@ void test_set_slot_then_compact_skips_holes() {
   TEST_ASSERT_EQUAL_UINT32(40, recent.entry(1)->positionMs);
 }
 
-void test_compact_drops_same_directory_duplicates() {
+void test_compact_keeps_different_files_in_one_directory() {
   RecentList recent;
   recent.setSlot(0, "/dir1/a.mp3", 10);
   recent.setSlot(1, "/dir2/b.mp3", 20);
   recent.setSlot(2, "/dir1/c.mp3", 30);
   recent.compact();
-  TEST_ASSERT_EQUAL_UINT(2, recent.size());
+  TEST_ASSERT_EQUAL_UINT(3, recent.size());
   TEST_ASSERT_EQUAL_STRING("/dir1/a.mp3", recent.entry(0)->path);
   TEST_ASSERT_EQUAL_UINT32(10, recent.entry(0)->positionMs);
   TEST_ASSERT_EQUAL_STRING("/dir2/b.mp3", recent.entry(1)->path);
+  TEST_ASSERT_EQUAL_STRING("/dir1/c.mp3", recent.entry(2)->path);
+  TEST_ASSERT_EQUAL_UINT32(30, recent.entry(2)->positionMs);
 }
 
 void test_compact_keeps_distinct_root_files() {
@@ -228,19 +234,19 @@ int main() {
   RUN_TEST(test_touch_same_path_updates_position_without_growing);
   RUN_TEST(test_touch_existing_middle_moves_to_front);
   RUN_TEST(test_touch_drops_oldest_when_full);
-  RUN_TEST(test_touch_same_directory_replaces_file_and_moves_to_front);
-  RUN_TEST(test_touch_front_directory_updates_file_in_place);
+  RUN_TEST(test_touch_same_directory_keeps_each_file_path);
+  RUN_TEST(test_touch_second_file_in_same_directory_keeps_both);
   RUN_TEST(test_touch_root_files_get_separate_entries);
   RUN_TEST(test_touch_distinguishes_nested_directories);
   RUN_TEST(test_touch_with_own_entry_path_updates_position_only);
-  RUN_TEST(test_touch_same_directory_at_full_capacity_keeps_size);
+  RUN_TEST(test_touch_new_file_in_full_list_keeps_other_file_from_same_directory);
   RUN_TEST(test_touch_rejects_invalid_path);
   RUN_TEST(test_touch_rejects_overlong_path);
 
   RUN_TEST(test_remove_at_compacts_list);
   RUN_TEST(test_set_slot_then_compact_skips_holes);
   RUN_TEST(test_set_position_updates_one_slot);
-  RUN_TEST(test_compact_drops_same_directory_duplicates);
+  RUN_TEST(test_compact_keeps_different_files_in_one_directory);
   RUN_TEST(test_compact_keeps_distinct_root_files);
   RUN_TEST(test_times_differ_when_only_position_changes);
 

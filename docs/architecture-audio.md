@@ -360,12 +360,18 @@ The decode step does not run on the UI task:
   than 3 s. Otherwise the player finds the previous sibling in the parent
   folder of `currentPath()` and restores the visible browser location.
 - **Browser location** — the device restores `browser_path` and
-  `browser_item` first. This location is independent of playback.
+  `browser_item` first. Next and previous track do not change this location.
+  A successful Recent selection does change it, because the browser opens that file.
   The Browser opens root `/` if the folder or selected item does not exist.
 - **Bookmark / boot** — the device opens `last_path` at `last_position_ms`
   on startup, paused until the user plays it. It keeps the Browser state.
   Selecting the bookmarked file in Browse also resumes it.
   Next, Previous, and Auto-next open tracks at zero.
+- **Recent** — the list stores up to five file paths. Each file keeps its own path.
+  A successful selection opens that file's folder and selects the file.
+  The browser saves the previous folder, cursor, and scroll.
+  The next Back in Browse restores that saved view.
+  A missing file does not move the browser.
 
 ### Bookmark persistence
 
@@ -375,7 +381,9 @@ A completed track uses zero. A different track replaces the pair.
 Track changes, backward seeks, pause, paused seeks, and completion request an immediate save.
 It retains pending changes after a failed save. Its retry timer uses unsigned subtraction.
 All App settings writes capture the bookmark through `saveSettings()`.
-Browser location stays independent. Idle shutdown proceeds only after a successful save.
+Next and previous track keep the browser location independent of playback.
+A successful Recent selection saves the opened folder.
+Idle shutdown proceeds only after a successful save.
 
 Settings writes a temporary config and checks its exact write count and size.
 It moves the main config to `config.cfg.bak` before it promotes the temporary file.

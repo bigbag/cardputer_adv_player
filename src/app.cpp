@@ -529,6 +529,7 @@ void App::playRecent() {
   updateBookmark(millis());
   Serial.printf("[app] recent %s\n", path);
   if (player_.open(path, startPosition)) {
+    if (browser_.revealPlayedFile(path)) rememberBrowserLocation();
     saveSettings(true);
     screen_ = Screen::Playing;
   }

@@ -336,6 +336,37 @@ bool SdBrowser::revealPath(const char* absPath) {
   return false;  // No listed entry matches the file.
 }
 
+bool SdBrowser::revealPlayedFile(const char* absPath) {
+  char savedPath[cfg::kMaxPathLen];
+  std::strncpy(savedPath, path_, sizeof(savedPath) - 1);
+  savedPath[sizeof(savedPath) - 1] = '\0';
+  const size_t savedCursor = cursor_;
+  const size_t savedScroll = scroll_;
+
+  if (absPath && absPath[0] == '/' && count_ > 0 && cursor_ < count_) {
+    char dir[cfg::kMaxPathLen];
+    char name[cfg::kMaxNameLen];
+    path::parent(dir, sizeof(dir), absPath);
+    path::fileName(name, sizeof(name), absPath);
+    if (name[0] != '\0' && std::strcmp(path_, dir) == 0 &&
+        std::strcmp(entries_[cursor_].name, name) == 0) {
+      return true;
+    }
+  }
+
+  if (!revealPath(absPath)) {
+    if (std::strcmp(path_, savedPath) != 0 || cursor_ != savedCursor ||
+        scroll_ != savedScroll) {
+      if (openPathInternal(savedPath, false)) {
+        restoreListPosition(savedCursor, savedScroll);
+      }
+    }
+    return false;
+  }
+  history_.pushIfViewChanged(savedPath, savedCursor, savedScroll, path_, cursor_);
+  return true;
+}
+
 bool SdBrowser::prevAudioBefore(const char* fileName, char* outPath, size_t outCap) {
   if (!fileName || !outPath || outCap == 0 || count_ == 0) return false;
 

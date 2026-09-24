@@ -174,10 +174,13 @@ This key map matches the firmware file `src/input.cpp`:
 - **`S` or `Tab`** — Settings
 - **`I`** — System information
 
-The list holds up to five unique files. The newest file is at the top.
+The list holds up to five files. Each file keeps its own path.
+The newest file is at the top.
 Each row shows the file name and the saved playback time.
-The Browser folder does not change.
-A missing file shows **Missing** and leaves the list.
+A successful selection opens the folder of that file and highlights the file.
+Back from Now Playing opens Browse on that file.
+The next Back restores the previous folder, cursor, and scroll.
+A missing file shows **Missing** and leaves the list. The browser does not move.
 
 ### Settings (`S` / Tab)
 
@@ -213,15 +216,13 @@ you press **Space**. If the file no longer exists, the device opens the Browser.
 ### Playback bookmark
 
 The device keeps the active file path and its playback time as `last_path`
-and `last_position_ms`. It also keeps a Recent list of up to five entries.
-Each entry holds the last file you played from one folder, with its saved time.
-Files in the root folder get one entry each.
+and `last_position_ms`. It also keeps a Recent list of up to five files.
+Each entry holds one file path and its saved time.
 It saves the position every 10 seconds during playback, on pause, and before idle shutdown.
 The save interval stays active on every screen and while the display is off.
 A paused seek also saves the new position. A completed track resets the position to zero.
-Starting a file from a folder already in Recent replaces that entry with the
-new file and moves the entry to the top. A file from a new folder adds an
-entry at the top. The oldest entry drops out at five entries.
+Starting a file that is already in Recent moves that entry to the top and updates its time.
+A new file adds an entry at the top. The oldest entry drops out at five entries.
 
 The device resumes the saved file automatically on startup, paused at its
 saved position. Select another file in Browse to start from zero.
@@ -459,6 +460,13 @@ The full on-device matrix and controlled listening comparisons remain incomplete
 32. Keep only a complete `config.cfg.bak` and an incomplete `config.cfg.tmp` in `/.asvmp3/`.
     Boot and check that settings and the bookmark come from the backup.
     Check that the next successful save creates `config.cfg`.
+33. Play two files from one folder, then one file from another folder.
+    Open Recent. Check that both files from the first folder remain in the list.
+    Select the file from the other folder.
+    Press **Back**. Check that Browse shows that file.
+    Press **Back** again. Check that Browse returns to the previous folder, cursor, and scroll.
+    Restart the device. Check that this Back history is gone.
+    Check that Browse opens the folder of the selected file.
 
 **Hardware validation status:** host tests and the firmware build pass.
 The user reports that FLAC playback is unusable after full device testing.

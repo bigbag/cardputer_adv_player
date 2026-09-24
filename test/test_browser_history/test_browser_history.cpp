@@ -72,6 +72,45 @@ void test_clamp_position_keeps_selected_row_visible() {
   TEST_ASSERT_EQUAL_UINT(0, scroll);
 }
 
+void test_push_if_view_changed_skips_the_same_folder_and_cursor() {
+  BrowserHistory history;
+  TEST_ASSERT_TRUE(history.push("/Music", 2, 0));
+  TEST_ASSERT_TRUE(history.pushIfViewChanged("/Music", 2, 0, "/Music", 2));
+  TEST_ASSERT_EQUAL_UINT(1, history.size());
+
+  BrowserHistoryFrame frame{};
+  TEST_ASSERT_TRUE(history.peek(&frame));
+  TEST_ASSERT_EQUAL_STRING("/Music", frame.path);
+  TEST_ASSERT_EQUAL_UINT(2, frame.cursor);
+}
+
+void test_push_if_view_changed_saves_previous_cursor_in_same_folder() {
+  BrowserHistory history;
+  TEST_ASSERT_TRUE(history.pushIfViewChanged("/Album", 4, 1, "/Album", 7));
+
+  BrowserHistoryFrame frame{};
+  TEST_ASSERT_TRUE(history.peek(&frame));
+  TEST_ASSERT_EQUAL_STRING("/Album", frame.path);
+  TEST_ASSERT_EQUAL_UINT(4, frame.cursor);
+  TEST_ASSERT_EQUAL_UINT(1, frame.scroll);
+  TEST_ASSERT_EQUAL_UINT(1, history.size());
+}
+
+void test_push_if_view_changed_saves_previous_folder() {
+  BrowserHistory history;
+  TEST_ASSERT_TRUE(history.push("/", 1, 0));
+  TEST_ASSERT_TRUE(history.pushIfViewChanged("/Music", 3, 1, "/Podcasts", 0));
+
+  BrowserHistoryFrame frame{};
+  TEST_ASSERT_TRUE(history.peek(&frame));
+  TEST_ASSERT_EQUAL_STRING("/Music", frame.path);
+  TEST_ASSERT_EQUAL_UINT(3, frame.cursor);
+  TEST_ASSERT_EQUAL_UINT(1, frame.scroll);
+  history.discardTop();
+  TEST_ASSERT_TRUE(history.peek(&frame));
+  TEST_ASSERT_EQUAL_STRING("/", frame.path);
+}
+
 void setUp() {}
 void tearDown() {}
 
@@ -81,5 +120,8 @@ int main() {
   RUN_TEST(test_pop_then_enter_replaces_abandoned_branch);
   RUN_TEST(test_clear_and_capacity_are_safe);
   RUN_TEST(test_clamp_position_keeps_selected_row_visible);
+  RUN_TEST(test_push_if_view_changed_skips_the_same_folder_and_cursor);
+  RUN_TEST(test_push_if_view_changed_saves_previous_cursor_in_same_folder);
+  RUN_TEST(test_push_if_view_changed_saves_previous_folder);
   return UNITY_END();
 }

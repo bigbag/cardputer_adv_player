@@ -24,6 +24,10 @@ class SdBrowser {
   // List the parent folder of absPath. Move the cursor to the file.
   // Return false if the file does not appear in the list.
   bool revealPath(const char* absPath);
+  // Open the folder of absPath and select that file.
+  // Save the previous folder, cursor, and scroll for Back.
+  // Return false when the file is not in the list. The browser then stays unchanged.
+  bool revealPlayedFile(const char* absPath);
   // Return the current folder and selected entry, not the cursor index or scroll position.
   BrowserLocation location() const;
   // Restore the folder and selected entry. Use root if the folder or item does not exist.
