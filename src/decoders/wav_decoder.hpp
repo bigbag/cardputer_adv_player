@@ -32,6 +32,7 @@ class WavDecoder : public IDecoder {
  public:
   bool open(const char* path) override;
   void close() override;
+  ~WavDecoder() { close(); }
   AudioFormat format() const override;
   DecodeStatus decode(int16_t* outStereo, size_t maxFrames, size_t* gotFrames) override;
   bool seekMs(uint32_t ms) override;

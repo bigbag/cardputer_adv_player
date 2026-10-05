@@ -26,6 +26,7 @@ class AudioOut {
   uint32_t rate_ = 0;
   int volume_ = 45;
   bool ready_ = false;
+  bool codecReady_ = false;  // ES8311 register sequence succeeded; gates I2S-only recovery.
   bool installed_ = false;  // Track driver ownership so end() can release partial setup.
   int32_t gainQ15_ = 0;
 };

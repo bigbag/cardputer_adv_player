@@ -89,6 +89,53 @@ void test_invalid_position_values_are_rejected() {
   TEST_ASSERT_EQUAL_UINT32(4294967295u, boundary.lastPositionMs());
 }
 
+void test_brightness_parse_clamps_without_wrapping() {
+  seed(Settings::kConfigPath, "brightness=-1\n");
+  Settings negative;
+  negative.load();
+  TEST_ASSERT_EQUAL_UINT8(10, negative.brightness());
+
+  seed(Settings::kConfigPath, "brightness=300\n");
+  Settings overflow;
+  overflow.load();
+  TEST_ASSERT_EQUAL_UINT8(255, overflow.brightness());
+}
+
+void test_timeout_parse_rejects_garbage() {
+  seed(Settings::kConfigPath, "timeout_ms=abc\n");
+  Settings letters;
+  letters.load();
+  TEST_ASSERT_EQUAL_UINT32(10000, letters.displayTimeoutMs());
+
+  seed(Settings::kConfigPath, "timeout_ms=-1\ntimeout_ms=10x\n");
+  Settings wrapped;
+  wrapped.load();
+  TEST_ASSERT_EQUAL_UINT32(10000, wrapped.displayTimeoutMs());
+
+  seed(Settings::kConfigPath, "timeout_ms=0\n");
+  Settings never;
+  never.load();
+  TEST_ASSERT_EQUAL_UINT32(0, never.displayTimeoutMs());
+}
+
+void test_timeout_parse_rejects_overflow() {
+  seed(Settings::kConfigPath, "timeout_ms=4294967295\n");
+  Settings limit;
+  limit.load();
+  TEST_ASSERT_EQUAL_UINT32(4294967295u, limit.displayTimeoutMs());
+
+  seed(Settings::kConfigPath, "timeout_ms=30000\ntimeout_ms=4294967296\n");
+  Settings overflow;
+  overflow.load();
+  TEST_ASSERT_EQUAL_UINT32(30000, overflow.displayTimeoutMs());
+
+  seed(Settings::kConfigPath, "timeout_ms=30000\ntimeout_ms=10x\n");
+  Settings trailed;
+  trailed.load();
+  TEST_ASSERT_EQUAL_UINT32(30000, trailed.displayTimeoutMs());
+
+}
+
 void test_short_write_keeps_the_previous_config() {
   Settings settings;
   settings.load();
@@ -453,6 +500,9 @@ int main() {
   RUN_TEST(test_pair_loads_in_any_line_order);
   RUN_TEST(test_old_config_without_position_loads_zero);
   RUN_TEST(test_invalid_position_values_are_rejected);
+  RUN_TEST(test_brightness_parse_clamps_without_wrapping);
+  RUN_TEST(test_timeout_parse_rejects_garbage);
+  RUN_TEST(test_timeout_parse_rejects_overflow);
   RUN_TEST(test_short_write_keeps_the_previous_config);
   RUN_TEST(test_backup_rename_failure_keeps_the_current_config);
   RUN_TEST(test_promotion_failure_restores_the_previous_config);

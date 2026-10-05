@@ -60,4 +60,5 @@ class App {
   BookmarkCheckpoint bookmarkCheckpoint_;
   bool browserLocationDirty_ = false;
   uint32_t browserLocationChangedAtMs_ = 0;
+  uint8_t browserLocationFailures_ = 0;
 };

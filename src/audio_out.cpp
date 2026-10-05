@@ -105,6 +105,7 @@ void AudioOut::i2sStop() {
 }
 
 bool AudioOut::begin() {
+  codecReady_ = false;
   Wire.begin(cfg::kI2cSda, cfg::kI2cScl, 100000);
   delay(10);
 
@@ -112,6 +113,7 @@ bool AudioOut::begin() {
     Serial.println("[audio] ES8311 init failed");
     return false;
   }
+  codecReady_ = true;
 #if AUDIO_DIAG
   // Report failed register reads as unavailable, not as zero.
   for (uint8_t r : {0x00, 0x01, 0x02, 0x09, 0x12, 0x13, 0x32, 0x37}) {
@@ -138,11 +140,21 @@ void AudioOut::end() {
   }
   i2sStop();
   ready_ = false;
+  codecReady_ = false;
 }
 
 bool AudioOut::setSampleRate(uint32_t hz) {
-  if (!ready_) return false;
   if (hz == 0) return false;
+  if (!ready_) {
+    if (!codecReady_) return false;
+    if (!i2sStart(hz)) {
+      ready_ = false;
+      Serial.println("[audio] output unavailable");
+      return false;
+    }
+    ready_ = true;
+    return true;
+  }
   // Fast path only when the driver is actually installed.
   if (hz == rate_ && installed_) return true;
 
@@ -174,11 +186,18 @@ bool AudioOut::setSampleRate(uint32_t hz) {
 }
 
 bool AudioOut::resetStream() {
-  if (!ready_) return false;
   // ponytail: reinstall the driver on each seek to clear its queue and DMA.
-  // This uses public IDF calls but requires an allocation cycle.
-  // Use a measured public-API reset if seek latency becomes a problem.
-  const uint32_t rate = rate_;
+  const uint32_t rate = rate_ != 0 ? rate_ : cfg::kDefaultSampleRate;
+  if (!ready_) {
+    if (!codecReady_) return false;
+    if (!i2sStart(rate)) {
+      ready_ = false;
+      Serial.println("[audio] output unavailable");
+      return false;
+    }
+    ready_ = true;
+    return true;
+  }
   i2sStop();
   if (!i2sStart(rate)) {
     ready_ = false;

@@ -107,9 +107,10 @@ bool SdBrowser::listCurrent() {
 
   DIR* dir = ::opendir(vfsPath);
   if (!dir) {
-    // Use the Arduino SD API if VFS opendir fails.
     Serial.printf("[sd] opendir(%s) failed — Arduino fallback\n", vfsPath);
-    return listCurrentArduino();
+    const bool ok = listCurrentArduino();
+    if (!ok && std::strcmp(path_, "/") == 0) sdOk_ = false;
+    return ok;
   }
 
   // Reserve a path buffer for entries that need a stat call.
@@ -121,6 +122,7 @@ bool SdBrowser::listCurrent() {
     if (!ent) {
       if (errno != 0) {
         Serial.printf("[sd] readdir errno=%d\n", errno);
+        truncated_ = true;
       }
       break;
     }

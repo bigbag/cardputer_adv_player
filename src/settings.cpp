@@ -123,9 +123,18 @@ bool Settings::parseLine(const char* line) {
   if (std::strcmp(key, "volume") == 0 || std::strcmp(key, "vol") == 0) {
     volume_ = std::atoi(val);
   } else if (std::strcmp(key, "brightness") == 0 || std::strcmp(key, "bright") == 0) {
-    brightness_ = static_cast<uint8_t>(std::atoi(val));
+    int b = std::atoi(val);
+    if (b < 0) b = 0;
+    if (b > 255) b = 255;
+    brightness_ = static_cast<uint8_t>(b);
   } else if (std::strcmp(key, "timeout") == 0 || std::strcmp(key, "timeout_ms") == 0) {
-    displayTimeoutMs_ = static_cast<uint32_t>(std::strtoul(val, nullptr, 10));
+    char* end = nullptr;
+    errno = 0;
+    const unsigned long timeout = std::strtoul(val, &end, 10);
+    if (errno == 0 && std::isdigit(static_cast<unsigned char>(val[0])) &&
+        end != val && *end == '\0' && timeout <= 0xFFFFFFFFul) {
+      displayTimeoutMs_ = static_cast<uint32_t>(timeout);
+    }
   } else if (std::strcmp(key, "idle_timeout_ms") == 0) {
     char* end = nullptr;
     errno = 0;

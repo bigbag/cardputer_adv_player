@@ -1,6 +1,7 @@
 #include "wav_decoder.hpp"
 #include "config.hpp"
 #include <cstring>
+#include <new>
 
 namespace {
 
@@ -196,7 +197,12 @@ bool WavDecoder::open(const char* path) {
     f.close();
     return false;
   }
-  file_ = new fs::File(std::move(f));
+  auto* held = new (std::nothrow) fs::File(std::move(f));
+  if (!held) {
+    f.close();
+    return false;
+  }
+  file_ = held;
   bytesRead_ = 0;
   return true;
 }

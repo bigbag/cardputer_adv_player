@@ -91,8 +91,10 @@ bool App::saveSettings(bool showError) {
   bookmarkCheckpoint_.attempted(now, saved);
   if (saved) {
     browserLocationDirty_ = false;
+    browserLocationFailures_ = 0;
   } else {
     browserLocationChangedAtMs_ = now;
+    if (browserLocationFailures_ < 8) ++browserLocationFailures_;
     if (showError) ui_.showToast("Save fail (SD?)", now);
   }
   return saved;
@@ -102,6 +104,7 @@ void App::rememberBrowserLocation() {
   settings_.setBrowserLocation(browser_.location());
   browserLocationDirty_ = true;
   browserLocationChangedAtMs_ = millis();
+  browserLocationFailures_ = 0;
 }
 
 void App::flushBrowserLocation(bool showError) {
@@ -194,9 +197,10 @@ void App::loop() {
   if (updateBookmark(millis())) saveSettings(true);
 
 
-  if (browserLocationDirty_ &&
-      millis() - browserLocationChangedAtMs_ >= cfg::kBrowserLocationSaveDelayMs) {
-    flushBrowserLocation(false);
+  if (browserLocationDirty_) {
+    const uint32_t delayMs =
+        cfg::kBrowserLocationSaveDelayMs * (1u + browserLocationFailures_);
+    if (millis() - browserLocationChangedAtMs_ >= delayMs) flushBrowserLocation(false);
   }
 
   const PlayerSnapshot player = player_.snapshot();
@@ -299,6 +303,7 @@ void App::handleBrowse(Action a) {
     case Action::Enter: {
       if (!browser_.sdOk()) {
         Serial.println("[app] SD retry");
+        player_.stop();
         if (browser_.remount()) {
           settings_.load();
           applySettings();
