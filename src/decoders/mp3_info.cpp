@@ -96,6 +96,11 @@ Mp3StreamInfo mp3ParseInfo(const uint8_t* frame, size_t frameSize) {
     }
   }
 
+  // The range must hold this frame and at least 24 bytes per declared frame.
+  if (out.audioBytes < frameSize || out.totalFrames > out.audioBytes / 24) {
+    out.audioBytes = 0;
+  }
+
   // A usable TOC needs the byte range it interpolates over and a
   // nondecreasing table.
   out.hasSeekToc = tocPresent && out.audioBytes > 0;

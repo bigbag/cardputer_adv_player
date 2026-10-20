@@ -115,6 +115,7 @@ bool SdBrowser::listCurrent() {
 
   // Reserve a path buffer for entries that need a stat call.
   char childPath[cfg::kMaxPathLen + 16];
+  bool readFailed = false;
 
   while (true) {
     errno = 0;
@@ -123,6 +124,7 @@ bool SdBrowser::listCurrent() {
       if (errno != 0) {
         Serial.printf("[sd] readdir errno=%d\n", errno);
         truncated_ = true;
+        readFailed = true;
       }
       break;
     }
@@ -176,6 +178,10 @@ bool SdBrowser::listCurrent() {
   Serial.printf("[sd] list %s → %u entries%s in %lums (readdir)\n", path_,
                 static_cast<unsigned>(count_), truncated_ ? " (trunc)" : "",
                 static_cast<unsigned long>(dt));
+  if (readFailed) {
+    if (std::strcmp(path_, "/") == 0) sdOk_ = false;
+    return false;
+  }
   return true;
 }
 
@@ -304,7 +310,7 @@ bool SdBrowser::nextAudioAfter(const char* fileName, char* outPath, size_t outCa
 
   size_t startIdx = count_;
   for (size_t i = 0; i < count_; ++i) {
-    if (std::strcmp(entries_[i].name, fileName) == 0) {
+    if (cmpInsensitive(entries_[i].name, fileName) == 0) {
       startIdx = i;
       break;
     }
@@ -330,7 +336,7 @@ bool SdBrowser::revealPath(const char* absPath) {
 
   if (!openPathInternal(dir, false)) return false;
   for (size_t i = 0; i < count_; ++i) {
-    if (std::strcmp(entries_[i].name, name) == 0) {
+    if (cmpInsensitive(entries_[i].name, name) == 0) {
       setCursor(i);
       return true;
     }
@@ -350,8 +356,8 @@ bool SdBrowser::revealPlayedFile(const char* absPath) {
     char name[cfg::kMaxNameLen];
     path::parent(dir, sizeof(dir), absPath);
     path::fileName(name, sizeof(name), absPath);
-    if (name[0] != '\0' && std::strcmp(path_, dir) == 0 &&
-        std::strcmp(entries_[cursor_].name, name) == 0) {
+    if (name[0] != '\0' && cmpInsensitive(path_, dir) == 0 &&
+        cmpInsensitive(entries_[cursor_].name, name) == 0) {
       return true;
     }
   }
@@ -374,7 +380,7 @@ bool SdBrowser::prevAudioBefore(const char* fileName, char* outPath, size_t outC
 
   size_t startIdx = count_;
   for (size_t i = 0; i < count_; ++i) {
-    if (std::strcmp(entries_[i].name, fileName) == 0) {
+    if (cmpInsensitive(entries_[i].name, fileName) == 0) {
       startIdx = i;
       break;
     }
@@ -426,7 +432,7 @@ bool SdBrowser::restoreLocationInternal(const BrowserLocation& location,
     return count_ == 0 ? true : restoreRoot();
   }
   for (size_t i = 0; i < count_; ++i) {
-    if (std::strcmp(entries_[i].name, location.item) == 0) {
+    if (cmpInsensitive(entries_[i].name, location.item) == 0) {
       setCursor(i);
       return true;
     }

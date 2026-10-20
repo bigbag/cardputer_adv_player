@@ -175,6 +175,8 @@ void App::updateIdlePower(uint32_t nowMs, PlayState state) {
 void App::loop() {
   const uint32_t now = millis();
   M5Cardputer.update();
+  // Record completion before service() can replace the finished track.
+  if (updateBookmark(millis())) saveSettings(true);
   player_.service();
 
   Action a = input_.poll(screen_);
@@ -366,11 +368,13 @@ void App::handlePlaying(Action a) {
       player_.seekRelative(-cfg::kSeekStepSeconds);
       break;
     case Action::NextTrack:
+      updateBookmark(millis());
       if (!player_.nextTrack()) {
         ui_.showToast("Last track", millis());
       }
       break;
     case Action::PrevTrack:
+      updateBookmark(millis());
       player_.prevTrack();
       break;
     case Action::Back:

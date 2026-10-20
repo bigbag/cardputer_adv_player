@@ -212,7 +212,7 @@ bool Mp3Decoder::frameStep(Impl& d, size_t& consumed, DecodeStatus& failStatus,
       // than its own header-declared frame is a truncated final frame
       // (clean finish); anything else is trailing padding (all zero, clean
       // finish) or junk (controlled error).
-      bool syncStart = d.inBuf[0] == 0xFF && (d.inBuf[1] & 0xE0) == 0xE0;
+      bool syncStart = d.inBufUsed >= 3 && hdr_valid(d.inBuf);
       int frameLen = 0;
       if (syncStart && d.formatValid) {
         frameLen = hdr_frame_bytes(d.inBuf, d.dec.free_format_bytes) +
@@ -519,7 +519,9 @@ bool Mp3Decoder::seekMs(uint32_t ms) {
   if (!impl_ || !impl_->formatValid || impl_->fmt.durationMs == 0) return false;
   Impl& d = *impl_;
 
-  uint32_t audioBytes = static_cast<uint32_t>(d.logicalEnd - d.audioStart);
+  uint32_t audioBytes = d.info.hasSeekToc && d.info.audioBytes > 0
+                            ? d.info.audioBytes
+                            : static_cast<uint32_t>(d.logicalEnd - d.audioStart);
   uint32_t rel = mp3SeekByteOffset(d.info, audioBytes, d.fmt.durationMs, ms);
   uint32_t target = static_cast<uint32_t>(d.audioStart + rel);
   // ponytail: bounded byte pre-roll (one input window before the target)

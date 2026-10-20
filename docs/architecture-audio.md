@@ -140,7 +140,7 @@ product:
   Track searches temporarily use the parent folder of `currentPath()`.
   The player then restores the visible Browser state.
 - **`IDecoder`** (`src/decoders/decoder.hpp`) — common interface with
-  `open`, `decode`, `seekMs`, `positionMs`, and `format`.
+  `open`, `close`, `decode`, `seekMs`, `positionMs`, and `format`.
 - **`Mp3Decoder`** uses the third-party **minimp3** library.
   It reads data from the SD card and produces PCM samples.
 - **`WavDecoder`** supports 16-bit PCM WAV only.
@@ -233,16 +233,14 @@ This timeout is not a bound on a full track operation or an SD access.
 The code writes these registers over I2C at start
 (`AudioOut::esInitRegisters`):
 
-| Reg  | Value | Role (summary)         |
-|------|-------|------------------------|
-| 0x00 | 0x80  | Reset / clock domain   |
-| 0x01 | 0xB5  | Clock manager          |
-| 0x02 | 0x18  | Clock config           |
-| 0x0D | 0x01  | System                 |
-| 0x12 | 0x00  | DAC power control |
-| 0x13 | 0x10  | Headphone output control |
-| 0x32 | 0xBF  | DAC volume at 0 dB |
-| 0x37 | 0x08  | DAC equalizer bypass |
+- Register `0x00` = `0x80` — reset and clock domain
+- Register `0x01` = `0xB5` — clock manager
+- Register `0x02` = `0x18` — clock configuration
+- Register `0x0D` = `0x01` — system
+- Register `0x12` = `0x00` — DAC power control
+- Register `0x13` = `0x10` — headphone output control
+- Register `0x32` = `0xBF` — DAC volume at 0 dB
+- Register `0x37` = `0x08` — DAC equalizer bypass
 
 During playback, the DAC digital volume register (0x32) stays at `0xBF`.
 The software applies the user volume setting to PCM samples.
@@ -307,6 +305,8 @@ Bounded PCM does not rule out analog distortion or unsafe headphone levels.
   The time row marks an estimated duration with `~`.
   Unknown duration remains `--:--`.
 - A usable Xing TOC supplies approximate time-to-byte mapping.
+  Its byte range must contain the first frame and at least 24 bytes per declared frame.
+  The byte range must not exceed the available audio data.
   Otherwise seek uses a bounded linear estimate.
   Nonzero seeks decode preceding frames within one input window to warm the reservoir.
   Seek-to-zero keeps the original beginning.
@@ -333,11 +333,13 @@ Unsupported extensions do not open.
 
 ## 7. Threading and cores
 
-| Context | Core | Work |
-|---------|------|------|
-| Arduino `loop` / UI | 1 (typical) | keys, display, settings, `service()` |
-| FreeRTOS `"audio"` | **0** | open/seek/close decoder, decode, output controls and I2S writes |
-| I2S DMA / IDF | — | background DMA to GPIO |
+- The Arduino `loop` and the UI run on core 1.
+  They handle keys, the display, settings, and `service()`.
+- The FreeRTOS `"audio"` task runs on core 0.
+  It opens, seeks, decodes, and closes the decoder.
+  It also controls the output and writes to I2S.
+- The I2S DMA controller runs in the background.
+  It transfers queued PCM to the GPIO pins.
 
 The decode step does not run on the UI task:
 

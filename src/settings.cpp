@@ -106,19 +106,23 @@ bool Settings::parseLine(const char* line) {
   std::memcpy(key, line, klen);
   key[klen] = '\0';
 
+  for (char* p = key; *p; ++p) {
+    *p = static_cast<char>(std::tolower(static_cast<unsigned char>(*p)));
+  }
+
+  const bool preserveValue = std::strcmp(key, "browser_item") == 0;
   const char* v = eq + 1;
-  while (*v && std::isspace(static_cast<unsigned char>(*v))) ++v;
+  if (!preserveValue) {
+    while (*v && std::isspace(static_cast<unsigned char>(*v))) ++v;
+  }
   size_t vlen = std::strlen(v);
-  while (vlen > 0 && std::isspace(static_cast<unsigned char>(v[vlen - 1]))) --vlen;
+  if (!preserveValue) {
+    while (vlen > 0 && std::isspace(static_cast<unsigned char>(v[vlen - 1]))) --vlen;
+  }
   const bool pathTooLong = vlen >= cfg::kMaxPathLen;
   if (vlen >= sizeof(val)) vlen = sizeof(val) - 1;
   std::memcpy(val, v, vlen);
   val[vlen] = '\0';
-
-
-  for (char* p = key; *p; ++p) {
-    *p = static_cast<char>(std::tolower(static_cast<unsigned char>(*p)));
-  }
 
   if (std::strcmp(key, "volume") == 0 || std::strcmp(key, "vol") == 0) {
     volume_ = std::atoi(val);

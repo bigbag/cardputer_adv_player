@@ -34,6 +34,21 @@ void test_round_trip_persists_the_pair() {
                    std::string::npos);
 }
 
+void test_browser_item_spaces_round_trip() {
+  Settings settings;
+  settings.load();
+  BrowserLocation location{};
+  std::strcpy(location.path, "/Music");
+  std::strcpy(location.item, " song.mp3 ");
+  settings.setBrowserLocation(location);
+  TEST_ASSERT_TRUE(settings.save());
+
+  Settings restarted;
+  restarted.load();
+  TEST_ASSERT_EQUAL_STRING("/Music", restarted.browserLocation().path);
+  TEST_ASSERT_EQUAL_STRING(" song.mp3 ", restarted.browserLocation().item);
+}
+
 void test_changed_path_resets_position_same_path_keeps_it() {
   Settings settings;
   settings.load();
@@ -496,6 +511,7 @@ void tearDown() {}
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_round_trip_persists_the_pair);
+  RUN_TEST(test_browser_item_spaces_round_trip);
   RUN_TEST(test_changed_path_resets_position_same_path_keeps_it);
   RUN_TEST(test_pair_loads_in_any_line_order);
   RUN_TEST(test_old_config_without_position_loads_zero);

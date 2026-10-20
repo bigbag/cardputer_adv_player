@@ -13,4 +13,5 @@ class Input {
  private:
   bool locked_ = false;
   bool waitForRelease_ = false;
+  char activeKey_ = '\0';
 };

@@ -18,6 +18,11 @@ static void drawFileText(char* text, int x, int y, int right = cfg::kScreenW - 2
   d.setFont(previousFont);
 }
 
+static bool toastDeadlineReached(uint32_t nowMs, uint32_t expiresAtMs) {
+  return expiresAtMs != 0 &&
+         static_cast<int32_t>(nowMs - expiresAtMs) >= 0;
+}
+
 void Ui::begin() {
   applyTheme(themes::get(0));
   auto& d = M5Cardputer.Display;
@@ -63,6 +68,7 @@ void Ui::showToast(const char* text, uint32_t nowMs) {
   strncpy(toast_.text, text, sizeof(toast_.text) - 1);
   toast_.text[sizeof(toast_.text) - 1] = '\0';
   toast_.expiresAtMs = nowMs + cfg::kToastMs;
+  if (toast_.expiresAtMs == 0) toast_.expiresAtMs = 1;
 }
 
 bool Ui::browseChanged(const BrowseSnapshot& b) const {
@@ -158,7 +164,7 @@ bool Ui::render(Screen screen,
                 uint32_t nowMs,
                 bool force) {
   if (!displayOn_) {
-    if (toast_.expiresAtMs != 0 && nowMs >= toast_.expiresAtMs) {
+    if (toastDeadlineReached(nowMs, toast_.expiresAtMs)) {
       toast_.expiresAtMs = 0;
       lastToastExp_ = 0;
     }
@@ -190,9 +196,10 @@ bool Ui::render(Screen screen,
 
   const bool toastAppeared = (toast_.expiresAtMs != 0 && toast_.expiresAtMs != lastToastExp_);
   const bool toastExpired =
-      (lastToastExp_ != 0 && (toast_.expiresAtMs == 0 || nowMs >= toast_.expiresAtMs));
+      (lastToastExp_ != 0 &&
+       (toast_.expiresAtMs == 0 || toastDeadlineReached(nowMs, toast_.expiresAtMs)));
 
-  if (toast_.expiresAtMs != 0 && nowMs >= toast_.expiresAtMs) {
+  if (toastDeadlineReached(nowMs, toast_.expiresAtMs)) {
     toast_.expiresAtMs = 0;
   }
 
@@ -356,10 +363,12 @@ void Ui::drawBrowse(const BrowseSnapshot& b, bool full) {
     d.drawString("(empty)", 4, listY + 2);
   }
 
+  const int truncY = cfg::kScreenH - cfg::kHintBarH - 10;
   if (b.truncated) {
-    const int truncY = cfg::kScreenH - cfg::kHintBarH - 10;
     d.setTextColor(theme_.dim, theme_.bg);
     d.drawString("* truncated", 2, truncY);
+  } else if (lastTruncated_) {
+    d.fillRect(0, truncY, cfg::kScreenW, 10, theme_.bg);
   }
 
   drawHint(";. move  P play  R rec  S set");
@@ -627,7 +636,7 @@ void Ui::drawHint(const char* text) {
 }
 
 void Ui::drawToastIfAny(uint32_t nowMs) {
-  if (toast_.expiresAtMs == 0 || nowMs >= toast_.expiresAtMs) {
+  if (toast_.expiresAtMs == 0 || toastDeadlineReached(nowMs, toast_.expiresAtMs)) {
     return;
   }
   auto& d = M5Cardputer.Display;

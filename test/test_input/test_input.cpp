@@ -3,11 +3,12 @@
 #include "input.hpp"
 
 static Action press(Input& input, const char* keys, bool fn = false,
-                    Screen screen = Screen::Playing) {
+                    Screen screen = Screen::Playing, bool shift = false) {
   auto& keyboard = M5Cardputer.Keyboard;
   keyboard.state = {};
   keyboard.state.fn = fn;
-  keyboard.count = fn ? 1 : 0;
+  keyboard.state.shift = shift;
+  keyboard.count = (fn ? 1 : 0) + (shift ? 1 : 0);
   for (; *keys; ++keys) {
     ++keyboard.count;
     switch (*keys) {
@@ -74,6 +75,17 @@ void test_r_requests_recent_on_browse_and_playing() {
   TEST_ASSERT_EQUAL(Action::Recent, press(input, "R", false, Screen::Playing));
 }
 
+void test_modifier_release_does_not_repeat_held_action() {
+  Input input;
+  TEST_ASSERT_EQUAL(Action::Settings,
+                    press(input, "S", false, Screen::Browse, true));
+  TEST_ASSERT_EQUAL(Action::None,
+                    press(input, "S", false, Screen::Settings, false));
+  press(input, "");
+  TEST_ASSERT_EQUAL(Action::Settings,
+                    press(input, "S", false, Screen::Settings, false));
+}
+
 
 void setUp() { M5Cardputer.Keyboard = {}; }
 void tearDown() {}
@@ -84,6 +96,7 @@ int main() {
   RUN_TEST(test_chord_consumes_keys_until_full_release);
   RUN_TEST(test_chord_is_detected_when_key_count_does_not_change);
   RUN_TEST(test_r_requests_recent_on_browse_and_playing);
+  RUN_TEST(test_modifier_release_does_not_repeat_held_action);
 
   return UNITY_END();
 }

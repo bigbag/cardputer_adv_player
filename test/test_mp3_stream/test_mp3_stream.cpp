@@ -306,6 +306,28 @@ void test_junk_after_valid_prefix_is_controlled_error() {
   TEST_ASSERT_LESS_THAN_INT32(128, r.calls);
 }
 
+void test_reserved_sync_tail_is_controlled_error() {
+  Mp3TestFile base = loadFixture("cbr128_stereo_44100.mp3");
+  std::vector<uint8_t> raw(base.data(), base.data() + base.byteSize());
+  uint32_t hz = 0;
+  int channels = 0;
+  std::vector<int16_t> want = referencePcm(raw, &hz, &channels);
+
+  const uint8_t tails[][4] = {{0xFF, 0xE0, 0x00, 0x00},
+                              {0xFF, 0xFB, 0x8C, 0x00}};
+  for (const auto& tail : tails) {
+    std::vector<uint8_t> bytes = raw;
+    bytes.insert(bytes.end(), tail, tail + sizeof(tail));
+    Mp3TestFile file = Mp3TestFile::fromBytes(bytes.data(), bytes.size());
+    Mp3Decoder dec;
+    TEST_ASSERT_TRUE(dec.openWithFile(file));
+    DrainResult r = drain(dec);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DecodeStatus::Error),
+                            static_cast<uint8_t>(r.status));
+    TEST_ASSERT_TRUE(r.pcm == want);
+  }
+}
+
 void test_failed_read_before_eof_is_error_not_finished() {
   Mp3TestFile file = loadFixture("cbr128_stereo_44100.mp3");
   std::vector<uint8_t> raw(file.data(), file.data() + file.byteSize());
@@ -605,6 +627,34 @@ void test_vbr_toc_seek_lands_near_requested_time() {
   TEST_ASSERT_TRUE(deliveredMs + 3000 <= totalMs + 1500);
 }
 
+void test_vbr_toc_seek_ignores_trailing_zero_padding() {
+  Mp3TestFile base = loadFixture("vbr_stereo_44100.mp3");
+  std::vector<uint8_t> raw(base.data(), base.data() + base.byteSize());
+  uint32_t hz = 0;
+  int channels = 0;
+  std::vector<int16_t> want = referencePcm(raw, &hz, &channels);
+  TEST_ASSERT_TRUE(want.size() > 0);
+  const uint32_t totalMs = static_cast<uint32_t>(
+      (uint64_t)want.size() / 2 * 1000 / hz);
+
+  std::vector<uint8_t> padded = raw;
+  padded.insert(padded.end(), 12 * 1024, 0x00);
+  Mp3TestFile file = Mp3TestFile::fromBytes(padded.data(), padded.size());
+  const uint32_t targetMs = totalMs - 1500;
+
+  Mp3Decoder dec;
+  TEST_ASSERT_TRUE(dec.openWithFile(file));
+  TEST_ASSERT_TRUE(dec.seekMs(targetMs));
+  DrainResult r = drain(dec);
+  TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DecodeStatus::Finished),
+                          static_cast<uint8_t>(r.status));
+  const uint32_t deliveredMs =
+      static_cast<uint32_t>((uint64_t)r.pcm.size() / 2 * 1000 / hz);
+  TEST_ASSERT_TRUE(deliveredMs > 500);
+  TEST_ASSERT_TRUE(deliveredMs + targetMs + 1500 >= totalMs);
+  TEST_ASSERT_TRUE(deliveredMs + targetMs <= totalMs + 1500);
+}
+
 void test_seek_to_zero_replays_from_the_beginning() {
   Mp3TestFile file = loadFixture("noxing_cbr128_44100.mp3");
   std::vector<uint8_t> raw(file.data(), file.data() + file.byteSize());
@@ -869,6 +919,46 @@ void test_bogus_xing_metadata_falls_back_to_estimate() {
   TEST_ASSERT_TRUE(r2.pcm == want2);
 }
 
+void test_undersized_xing_range_uses_linear_seek() {
+  Mp3TestFile base = loadFixture("vbr_stereo_44100.mp3");
+  std::vector<uint8_t> raw(base.data(), base.data() + base.byteSize());
+  const size_t tagPos = 20 + 4 + 32;
+  TEST_ASSERT_EQUAL_MEMORY("Xing", raw.data() + tagPos, 4);
+  const uint32_t frames =
+      (uint32_t(raw[tagPos + 8]) << 24) | (uint32_t(raw[tagPos + 9]) << 16) |
+      (uint32_t(raw[tagPos + 10]) << 8) | uint32_t(raw[tagPos + 11]);
+  const uint32_t cases[][2] = {{0, 1}, {frames, 1}, {frames, frames * 24 - 1}};
+  auto put32 = [&](size_t at, uint32_t value) {
+    raw[at] = static_cast<uint8_t>(value >> 24);
+    raw[at + 1] = static_cast<uint8_t>(value >> 16);
+    raw[at + 2] = static_cast<uint8_t>(value >> 8);
+    raw[at + 3] = static_cast<uint8_t>(value);
+  };
+  for (const auto& fields : cases) {
+    put32(tagPos + 8, fields[0]);
+    put32(tagPos + 12, 0);
+    Mp3TestFile fallbackFile = Mp3TestFile::fromBytes(raw.data(), raw.size());
+    Mp3Decoder fallback;
+    TEST_ASSERT_TRUE(fallback.openWithFile(fallbackFile));
+    TEST_ASSERT_TRUE(fallback.seekMs(3000));
+    DrainResult expected = drain(fallback);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DecodeStatus::Finished),
+                           static_cast<uint8_t>(expected.status));
+
+    put32(tagPos + 12, fields[1]);
+    Mp3TestFile file = Mp3TestFile::fromBytes(raw.data(), raw.size());
+    Mp3Decoder dec;
+    TEST_ASSERT_TRUE(dec.openWithFile(file));
+    TEST_ASSERT_EQUAL_UINT32(fallback.format().durationMs, dec.format().durationMs);
+    TEST_ASSERT_EQUAL(fields[0] == 0, dec.format().durationEstimated);
+    TEST_ASSERT_TRUE(dec.seekMs(3000));
+    DrainResult result = drain(dec);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DecodeStatus::Finished),
+                           static_cast<uint8_t>(result.status));
+    TEST_ASSERT_TRUE(result.pcm == expected.pcm);
+  }
+}
+
 void test_estimate_scan_reads_are_bounded_across_junk_gap() {
   Mp3TestFile base = loadFixture("noxing_cbr128_44100.mp3");
   std::vector<uint8_t> bytes(base.data(), base.data() + 8192);  // ~19 frames
@@ -976,6 +1066,7 @@ int main() {
   RUN_TEST(test_final_partial_frame_finishes_with_complete_prefix);
   RUN_TEST(test_junk_input_is_rejected_at_open);
   RUN_TEST(test_junk_after_valid_prefix_is_controlled_error);
+  RUN_TEST(test_reserved_sync_tail_is_controlled_error);
   RUN_TEST(test_failed_read_before_eof_is_error_not_finished);
   RUN_TEST(test_failed_seek_at_open_fails);
   RUN_TEST(test_zero_capacity_decode_still_makes_progress);
@@ -987,6 +1078,7 @@ int main() {
   RUN_TEST(test_seek_beyond_duration_finishes_without_output);
   RUN_TEST(test_failed_seek_keeps_pcm_and_position);
   RUN_TEST(test_vbr_toc_seek_lands_near_requested_time);
+  RUN_TEST(test_vbr_toc_seek_ignores_trailing_zero_padding);
   RUN_TEST(test_seek_to_zero_replays_from_the_beginning);
   RUN_TEST(test_midfile_seek_output_corresponds_to_target_region);
   RUN_TEST(test_repeated_seek_discards_old_leftovers);
@@ -995,6 +1087,7 @@ int main() {
   RUN_TEST(test_id3v1_trailer_ends_finished_with_same_pcm);
   RUN_TEST(test_short_zero_padding_tail_ends_finished);
   RUN_TEST(test_bogus_xing_metadata_falls_back_to_estimate);
+  RUN_TEST(test_undersized_xing_range_uses_linear_seek);
   RUN_TEST(test_estimate_scan_reads_are_bounded_across_junk_gap);
   RUN_TEST(test_id3v1_with_short_reads_never_becomes_error);
   RUN_TEST(test_large_garbage_prefix_rejects_open_with_bounded_reads);
